@@ -90,17 +90,17 @@ class TextClassifier {
 
     for (int y = 0; y < imgHeight; y++) {
       final rowOffset = y * imgWidth;
-      final sourceRowOffset = y * resizedWidth;
 
       for (int x = 0; x < imgWidth; x++) {
         final pixelIndex = rowOffset + x;
 
         if (x < resizedWidth) {
-          final pixel = resized.getPixel(sourceRowOffset + x, y);
-          final b = pixel.b.toDouble() / 255.0;
-          final g = pixel.g.toDouble() / 255.0;
+          final pixel = resized.getPixel(x, y);
           final r = pixel.r.toDouble() / 255.0;
+          final g = pixel.g.toDouble() / 255.0;
+          final b = pixel.b.toDouble() / 255.0;
 
+          // BGR order to match Kotlin/Android
           outputArray[baseOffset + pixelIndex] = (b - 0.5) / 0.5;
           outputArray[baseOffset + channelStride + pixelIndex] =
               (g - 0.5) / 0.5;
@@ -116,7 +116,7 @@ class TextClassifier {
   }
 
   Future<List<bool>> decodeOutput(OrtValue output, int batchSz) async {
-    final outputData = await output.asList();
+    final outputData = await output.asFlattenedList();
     final results = <bool>[];
 
     for (int b = 0; b < batchSz; b++) {

@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_onnxruntime/flutter_onnxruntime.dart';
 import 'package:image/image.dart' as img;
 import 'types.dart';
@@ -157,14 +158,14 @@ class TextDetector {
     required int resizedHeight,
     required bool Function(TextBox, double) handler,
   }) async {
-    final outputData = await output.asList();
-    final outputList = outputData[0][0] as List<List<dynamic>>;
+    final outputData = await output.asFlattenedList();
+
     final probMap = List.generate(
       resizedHeight,
-      (y) => List.generate(
-        resizedWidth,
-        (x) => (outputList[y][x] as num).toDouble(),
-      ),
+      (y) => List.generate(resizedWidth, (x) {
+        final idx = y * resizedWidth + x;
+        return (outputData[idx] as num).toDouble();
+      }),
     );
 
     final binaryMap = List.generate(

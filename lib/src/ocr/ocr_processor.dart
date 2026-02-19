@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_onnxruntime/flutter_onnxruntime.dart';
 import 'package:image/image.dart' as img;
 import 'types.dart';
@@ -173,6 +174,8 @@ class OcrProcessor {
         filteredCharacters.add(characterBoxesPerDetection[i]);
       }
     }
+
+    debugPrint('Filtered to ${filteredResults.length} results');
 
     return OcrResult(
       boxes: filteredResults,

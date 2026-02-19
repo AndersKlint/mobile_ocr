@@ -111,17 +111,17 @@ class TextRecognizer {
 
     for (int y = 0; y < imgHeight; y++) {
       final rowOffset = y * targetWidth;
-      final sourceRowOffset = y * resizedWidth;
 
       for (int x = 0; x < targetWidth; x++) {
         final pixelIndex = rowOffset + x;
 
         if (x < resizedWidth) {
-          final pixel = resized.getPixel(sourceRowOffset + x, y);
-          final b = pixel.b.toDouble() / 255.0;
-          final g = pixel.g.toDouble() / 255.0;
+          final pixel = resized.getPixel(x, y);
           final r = pixel.r.toDouble() / 255.0;
+          final g = pixel.g.toDouble() / 255.0;
+          final b = pixel.b.toDouble() / 255.0;
 
+          // BGR order to match Kotlin/Android
           outputArray[baseOffset + pixelIndex] = (b - 0.5) / 0.5;
           outputArray[baseOffset + channelStride + pixelIndex] =
               (g - 0.5) / 0.5;
@@ -144,7 +144,7 @@ class TextRecognizer {
     List<int> contentWidths,
     int targetWidth,
   ) async {
-    final outputData = await output.asList();
+    final outputData = await output.asFlattenedList();
     final shape = output.shape;
     final seqLen = shape[1];
     final vocabSize = shape[2];
@@ -164,7 +164,11 @@ class TextRecognizer {
         var maxIndex = 0;
 
         for (int c = 1; c < vocabSize; c++) {
-          final prob = (outputData[timeOffset + c] as num).toDouble();
+          final idx = timeOffset + c;
+          if (idx >= outputData.length) {
+            break;
+          }
+          final prob = (outputData[idx] as num).toDouble();
           if (prob > maxProb) {
             maxProb = prob;
             maxIndex = c;

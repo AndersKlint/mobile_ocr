@@ -1,12 +1,42 @@
 import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:mobile_ocr/mobile_ocr.dart';
+import 'package:path_provider/path_provider.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
+    await _prepareModelsForDesktop();
+  }
+
   runApp(const MyApp());
+}
+
+Future<void> _prepareModelsForDesktop() async {
+  final appDir = await getApplicationSupportDirectory();
+  final modelsDir = Directory('${appDir.path}/assets/mobile_ocr');
+
+  if (!await modelsDir.exists()) {
+    await modelsDir.create(recursive: true);
+  }
+
+  const modelFiles = ['det.onnx', 'rec.onnx', 'cls.onnx', 'ppocrv5_dict.txt'];
+
+  for (final modelFile in modelFiles) {
+    final targetFile = File('${modelsDir.path}/$modelFile');
+    if (!await targetFile.exists()) {
+      final data = await rootBundle.load('assets/mobile_ocr/$modelFile');
+      await targetFile.writeAsBytes(
+        data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
+        flush: true,
+      );
+    }
+  }
 }
 
 class MyApp extends StatelessWidget {
@@ -48,6 +78,9 @@ class _OcrDemoPageState extends State<OcrDemoPage> {
     'assets/test_ocr/text_photos.jpeg',
   ];
 
+  static bool get _isDesktop =>
+      Platform.isLinux || Platform.isWindows || Platform.isMacOS;
+
   final ImagePicker _picker = ImagePicker();
   final MobileOcr _mobileOcr = MobileOcr();
   final TextDetectorController _textDetectorController =
@@ -77,7 +110,8 @@ class _OcrDemoPageState extends State<OcrDemoPage> {
             AnimatedBuilder(
               animation: _textDetectorController,
               builder: (context, _) {
-                final isReady = _textDetectorController.hasSelectableText &&
+                final isReady =
+                    _textDetectorController.hasSelectableText &&
                     !_textDetectorController.isProcessing;
                 return IconButton(
                   tooltip: isReady
@@ -173,10 +207,7 @@ class _OcrDemoPageState extends State<OcrDemoPage> {
           children: [
             if (showBaseImage)
               Positioned.fill(
-                child: Image.file(
-                  File(path),
-                  fit: BoxFit.contain,
-                ),
+                child: Image.file(File(path), fit: BoxFit.contain),
               ),
             TextDetectorWidget(
               key: ValueKey(path),
@@ -200,6 +231,7 @@ class _OcrDemoPageState extends State<OcrDemoPage> {
 
   Widget _buildActionBar(BuildContext context) {
     final hasImage = _imagePath != null;
+    final isDesktop = _isDesktop;
 
     return SafeArea(
       top: false,
@@ -225,21 +257,23 @@ class _OcrDemoPageState extends State<OcrDemoPage> {
                   child: OutlinedButton.icon(
                     onPressed: _isPickingImage
                         ? null
-                        : () => _pickImage(ImageSource.gallery),
+                        : () => _pickFromGallery(),
                     icon: const Icon(Icons.photo_library_outlined),
                     label: const Text('Gallery'),
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: _isPickingImage
-                        ? null
-                        : () => _pickImage(ImageSource.camera),
-                    icon: const Icon(Icons.camera_alt_outlined),
-                    label: const Text('Camera'),
+                if (!isDesktop) ...[
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: _isPickingImage
+                          ? null
+                          : () => _pickFromCamera(),
+                      icon: const Icon(Icons.camera_alt_outlined),
+                      label: const Text('Camera'),
+                    ),
                   ),
-                ),
+                ],
               ],
             ),
             if (_testImageAssets.isNotEmpty) ...[
@@ -320,13 +354,61 @@ class _OcrDemoPageState extends State<OcrDemoPage> {
     }
   }
 
-  Future<void> _pickImage(ImageSource source) async {
+  Future<void> _pickFromGallery() async {
     setState(() {
       _isPickingImage = true;
     });
 
     try {
-      final file = await _picker.pickImage(source: source);
+      if (_isDesktop) {
+        final result = await FilePicker.platform.pickFiles(
+          type: FileType.image,
+          allowMultiple: false,
+        );
+        if (result == null || result.files.isEmpty) {
+          return;
+        }
+        final file = result.files.first;
+        if (file.path == null) {
+          return;
+        }
+        if (!mounted) return;
+        setState(() {
+          _imagePath = file.path;
+          _lastHasTextResult = null;
+          _isCheckingHasText = false;
+        });
+      } else {
+        final file = await _picker.pickImage(source: ImageSource.gallery);
+        if (file == null) {
+          return;
+        }
+        if (!mounted) return;
+        setState(() {
+          _imagePath = file.path;
+          _lastHasTextResult = null;
+          _isCheckingHasText = false;
+        });
+      }
+    } catch (error) {
+      if (!mounted) return;
+      _showSnackBar(context, 'Failed to pick image: $error');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isPickingImage = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _pickFromCamera() async {
+    setState(() {
+      _isPickingImage = true;
+    });
+
+    try {
+      final file = await _picker.pickImage(source: ImageSource.camera);
       if (file == null) {
         return;
       }
@@ -406,8 +488,9 @@ class _OcrDemoPageState extends State<OcrDemoPage> {
     if (existing != null) {
       return existing;
     }
-    final directory =
-        await Directory.systemTemp.createTemp('mobile_ocr_example_assets_');
+    final directory = await Directory.systemTemp.createTemp(
+      'mobile_ocr_example_assets_',
+    );
     _assetCacheDirectory = directory;
     return directory;
   }

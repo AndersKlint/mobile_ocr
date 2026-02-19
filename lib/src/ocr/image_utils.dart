@@ -42,44 +42,34 @@ class ImageUtils {
       throw ArgumentError('Expected 4 points for text region');
     }
 
-    final width = math
-        .max(distance(points[0], points[1]), distance(points[2], points[3]))
-        .toInt()
-        .clamp(1, 10000);
+    // Use axis-aligned bounding box instead of perspective transform
+    // This is more robust and works well for most text
+    double minX = points[0].x;
+    double maxX = points[0].x;
+    double minY = points[0].y;
+    double maxY = points[0].y;
+    for (final p in points) {
+      if (p.x < minX) minX = p.x;
+      if (p.x > maxX) maxX = p.x;
+      if (p.y < minY) minY = p.y;
+      if (p.y > maxY) maxY = p.y;
+    }
 
-    final height = math
-        .max(distance(points[0], points[3]), distance(points[1], points[2]))
-        .toInt()
-        .clamp(1, 10000);
+    final width = (maxX - minX).toInt().clamp(1, 10000);
+    final height = (maxY - minY).toInt().clamp(1, 10000);
 
-    final srcPoints = [
-      points[0].x,
-      points[0].y,
-      points[1].x,
-      points[1].y,
-      points[2].x,
-      points[2].y,
-      points[3].x,
-      points[3].y,
-    ];
-
-    final dstPoints = [
-      0.0,
-      0.0,
-      width.toDouble(),
-      0.0,
-      width.toDouble(),
-      height.toDouble(),
-      0.0,
-      height.toDouble(),
-    ];
-
-    final cropped = perspectiveTransform(
+    final cropped = img.copyCrop(
       bitmap,
-      srcPoints,
-      dstPoints,
-      width,
-      height,
+      x: minX.toInt().clamp(0, bitmap.width - 1),
+      y: minY.toInt().clamp(0, bitmap.height - 1),
+      width: width.clamp(
+        1,
+        bitmap.width - minX.toInt().clamp(0, bitmap.width - 1),
+      ),
+      height: height.clamp(
+        1,
+        bitmap.height - minY.toInt().clamp(0, bitmap.height - 1),
+      ),
     );
 
     if (height / width >= 1.5) {
@@ -106,9 +96,48 @@ class ImageUtils {
           x.toDouble(),
           y.toDouble(),
         );
-        final srcX = srcCoord[0].toInt().clamp(0, src.width - 1);
-        final srcY = srcCoord[1].toInt().clamp(0, src.height - 1);
-        result.setPixel(x, y, src.getPixel(srcX, srcY));
+        final srcX = srcCoord[0];
+        final srcY = srcCoord[1];
+
+        // Bilinear interpolation
+        final x0 = srcX.floor();
+        final y0 = srcY.floor();
+        final x1 = x0 + 1;
+        final y1 = y0 + 1;
+
+        final fx = srcX - x0;
+        final fy = srcY - y0;
+
+        if (x0 >= 0 && x1 < src.width && y0 >= 0 && y1 < src.height) {
+          final p00 = src.getPixel(x0, y0);
+          final p01 = src.getPixel(x0, y1);
+          final p10 = src.getPixel(x1, y0);
+          final p11 = src.getPixel(x1, y1);
+
+          final r =
+              (p00.r * (1 - fx) * (1 - fy) +
+                      p10.r * fx * (1 - fy) +
+                      p01.r * (1 - fx) * fy +
+                      p11.r * fx * fy)
+                  .round();
+          final g =
+              (p00.g * (1 - fx) * (1 - fy) +
+                      p10.g * fx * (1 - fy) +
+                      p01.g * (1 - fx) * fy +
+                      p11.g * fx * fy)
+                  .round();
+          final b =
+              (p00.b * (1 - fx) * (1 - fy) +
+                      p10.b * fx * (1 - fy) +
+                      p01.b * (1 - fx) * fy +
+                      p11.b * fx * fy)
+                  .round();
+
+          result.setPixel(x, y, img.ColorRgb8(r, g, b));
+        } else if (x0 >= 0 && x0 < src.width && y0 >= 0 && y0 < src.height) {
+          // Nearest neighbor for edge pixels
+          result.setPixel(x, y, src.getPixel(x0, y0));
+        }
       }
     }
 
