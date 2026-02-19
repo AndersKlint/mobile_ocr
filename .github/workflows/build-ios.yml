@@ -1,0 +1,60 @@
+name: Build iOS
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Build type'
+        required: true
+        default: 'release'
+        type: choice
+        options:
+          - debug
+          - release
+      run_tests:
+        description: 'Run tests'
+        required: true
+        default: true
+        type: boolean
+
+jobs:
+  build-ios:
+    runs-on: macos-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.29.0'
+          channel: 'stable'
+
+      - name: Get dependencies
+        run: |
+          flutter pub get
+          cd example && flutter pub get
+
+      - name: Run analyzer
+        run: flutter analyze
+
+      - name: Run unit tests
+        if: inputs.run_tests
+        run: flutter test
+
+      - name: Build iOS app
+        working-directory: example
+        run: flutter build ios --${{ inputs.build_type }} --no-codesign
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-${{ inputs.build_type }}-build
+          path: example/build/ios/iphoneos/
+          retention-days: 7
+
+      - name: Run integration tests
+        if: inputs.run_tests
+        working-directory: example
+        run: flutter test integration_test/linux_ocr_test.dart -d ios
