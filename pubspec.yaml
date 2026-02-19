@@ -12,6 +12,8 @@ dependencies:
     sdk: flutter
   plugin_platform_interface: ^2.0.2
   path_provider: ^2.1.0
+  flutter_onnxruntime: ^1.6.3
+  image: ^4.0.0
 
 dev_dependencies:
   flutter_test:
@@ -39,6 +41,8 @@ flutter:
         package: io.ente.mobile_ocr
         pluginClass: MobileOcrPlugin
       ios:
+        pluginClass: MobileOcrPlugin
+      linux:
         pluginClass: MobileOcrPlugin
 
   # To add assets to your plugin package, add an assets section, like this:

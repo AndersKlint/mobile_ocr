@@ -1,14 +1,16 @@
 # Mobile OCR
 
 Mobile OCR is a Flutter plugin that delivers fully on-device text detection and
-recognition on Android and iOS. The two platforms share the same Dart API:
+recognition on Android, iOS, and Linux. The platforms share the same Dart API:
 
 - **Android (ONNX pipeline)** – A faithful port of the PaddleOCR v5 models,
   executed with ONNX Runtime for high-accuracy OCR without network access.
 - **iOS (Apple Vision)** – Uses the system Vision framework, so no model
   downloads are required and the plugin stays lightweight.
+- **Linux (Dart ONNX pipeline)** – Pure Dart implementation using ONNX Runtime
+  via FFI, with the same PaddleOCR v5 models.
 
-Everything below describes the Android pipeline unless explicitly noted. The
+Everything below describes the Android/Linux pipeline unless explicitly noted. The
 iOS implementation returns the same JSON payload so the Dart surface remains
 identical.
 
@@ -19,7 +21,7 @@ identical.
 - Text angle classification and auto-rotation for skewed crops
 - On-device processing with no network calls
 - Multi-language character dictionary (Chinese + English)
-- Shared results structure across Android and iOS
+- Shared results structure across Android, iOS, and Linux
 
 ## Installation
 
@@ -120,6 +122,28 @@ Currently supports:
 
 - ✅ Android (API 24+)
 - ✅ iOS 14+
+- ✅ Linux
+
+### Linux Setup
+
+On Linux, the plugin uses a pure Dart implementation with ONNX Runtime via FFI.
+You need to bundle the models with your application:
+
+1. Create a `assets/mobile_ocr/` directory in your app
+2. Copy the model files from `android/src/main/assets/mobile_ocr/`:
+   - `det.onnx` (4.6 MB)
+   - `rec.onnx` (16 MB)
+   - `cls.onnx` (570 KB)
+   - `ppocrv5_dict.txt` (73 KB)
+3. Add to your `pubspec.yaml`:
+
+```yaml
+flutter:
+  assets:
+    - assets/mobile_ocr/
+```
+
+The models will be extracted to the application support directory on first use.
 
 ## Acknowledgments
 
