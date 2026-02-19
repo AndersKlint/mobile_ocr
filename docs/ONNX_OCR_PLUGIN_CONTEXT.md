@@ -66,7 +66,7 @@ onnx_ocr_plugin/
 │       ├── TextRecognizer.kt   # Text recognition (CTC decoder)
 │       ├── TextClassifier.kt   # Angle classification
 │       ├── ImageUtils.kt       # Image processing utilities
-│       └── ModelManager.kt     # Runtime model download/cache manager
+│       └── ModelManager.kt     # Bundled model extraction manager
 ├── ios/                        # iOS implementation (Vision-based)
 │   └── Classes/
 │       └── MobileOcrPlugin.swift
@@ -75,9 +75,9 @@ onnx_ocr_plugin/
 │   └── mobile_ocr_plugin_platform_interface.dart
 └── example/                    # Sample app demonstrating usage
 
-> Android downloads the ONNX models and dictionary on demand from `https://models.ente.io/PP-OCRv5/`
-> and caches them under the host app’s `filesDir/onnx_ocr/PP-OCRv5/`. iOS relies on system Vision
-> APIs and does not need external assets.
+> Android bundles ONNX models in `android/src/main/assets/mobile_ocr/` and extracts them to
+> `filesDir/assets/mobile_ocr/` on first use. iOS relies on system Vision APIs and does not need
+> external assets.
 ```
 
 ### OCR Pipeline (Exact Copy of OnnxOCR)
@@ -117,7 +117,7 @@ onnx_ocr_plugin/
 
 - Built with Vision’s `VNRecognizeTextRequest`
 - Provides the same response schema (text, confidence, axis-aligned box, polygon points) as Android
-- `prepareModels` short-circuits with a ready response (no downloads required)
+- `prepareModels` short-circuits with a ready response (no extraction required on iOS)
 - Runs recognition on a background queue and returns results on the main thread
 
 ### Key Implementation Details (Android)
@@ -125,7 +125,7 @@ onnx_ocr_plugin/
 - **ONNX Runtime**: Version 1.16.3 for Android (only allowed external dependency)
 - **Async Processing**: Kotlin coroutines for non-blocking operations
 - **Memory Optimization**: All heavy processing stays in native layer
-- **Model Delivery**: `ModelManager` downloads PaddleOCR assets from `https://models.ente.io/PP-OCRv5/`, verifies SHA-256 hashes, and caches them under `filesDir/onnx_ocr/PP-OCRv5/`
+- **Model Delivery**: `ModelManager` extracts PaddleOCR assets from bundled APK resources, verifies SHA-256 hashes, and caches them under `filesDir/assets/mobile_ocr/`
 - **No OpenCV**: All image processing uses native Android APIs (Bitmap, Canvas, Matrix, Paint) or custom Kotlin implementations
 - **Zero .so file bloat**: No native libraries beyond ONNX Runtime
 - **Batch Processing**: Recognition processes up to 6 regions simultaneously
@@ -195,9 +195,8 @@ dependencies {
 
 The example app is configured for easy testing and verification of OCR functionality:
 
-- On Android, the first launch downloads the ONNX assets from the CDN; ensure the device has network
-  access. Progress is surfaced through the UI via the `prepareModels()` call.
-- Cached models live in the app sandbox; subsequent Android runs work offline unless hashes change.
+- On Android, models are bundled with the plugin and extracted on first use; no network access required.
+- Extracted models live in the app sandbox; subsequent Android runs work offline unless hashes change.
 - On iOS, `prepareModels()` is a no-op because Vision ships with the OS.
 
 #### Running Tests

@@ -3,7 +3,7 @@
 ## Project Overview
 - Flutter plugin delivering on-device OCR across Android and iOS.
 - Android Kotlin layer mirrors the original Python `OnnxOCR` pipeline using PaddleOCR v5 ONNX models (no OpenCV).
-- iOS implementation relies on the Apple Vision framework for text recognition, so no ONNX models are downloaded.
+- iOS implementation relies on the Apple Vision framework for text recognition, so no ONNX models are needed.
 - Example app in `example/` offers regression checks with meme, receipt, and UI screenshots to validate detection accuracy.
 
 ## Project Structure & Module Organization
@@ -12,7 +12,7 @@
 - `ios/Classes/` provides the Vision-based implementation (`MobileOcrPlugin.swift`).
 - `documentation/` contains the context and implementation guides—treat these as the contract when porting Python behavior.
 - `example/` demonstrates integration, ships reference assets in `example/assets/test_ocr/`, and doubles as the manual verification harness.
-- ONNX models download at runtime via `ModelManager` on Android; nothing under `models/` should be checked in.
+- ONNX models are bundled in `android/src/main/assets/mobile_ocr/` and extracted on first use via `ModelManager`.
 
 ## Build, Test, and Development Commands
 - `flutter pub get` (run here and in `example/`) loads dependencies.
@@ -34,10 +34,10 @@
 
 ## Commit & Pull Request Guidelines
 - Subject lines stay under 72 characters and in imperative mood (`Add Android tensor helper`).
-- Describe scope, testing performed, and model download considerations in the PR body; attach console snippets or screenshots for OCR changes.
+- Describe scope, testing performed, and model extraction considerations in the PR body; attach console snippets or screenshots for OCR changes.
 - Reference tracking issues (`Fixes #123`) and flag any skipped tests or follow-up work.
 
 ## Security & Configuration Tips
 - Keep credentials out of logs; redact user data before merging.
-- ONNX models and dictionaries are fetched on demand—never vendor them into the repo.
-- Review diffs for large binaries or debug artifacts; delete any stray cached downloads before submitting.
+- ONNX models are bundled with the plugin in `android/src/main/assets/mobile_ocr/`.
+- Review diffs for large binaries or debug artifacts; delete any stray cached extractions before submitting.

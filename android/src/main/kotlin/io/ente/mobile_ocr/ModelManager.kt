@@ -7,8 +7,6 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStream
-import java.net.HttpURLConnection
-import java.net.URL
 import java.security.MessageDigest
 
 private data class ModelAsset(
@@ -29,12 +27,10 @@ data class ModelFiles(
 class ModelManager(private val context: Context) {
 
     companion object {
-        private const val BASE_URL = "https://models.ente.io/PP-OCRv5/"
         private const val MODEL_VERSION = "pp-ocrv5-202410"
-        private const val CONNECT_TIMEOUT_MS = 15_000
-        private const val READ_TIMEOUT_MS = 60_000
         private const val BUFFER_SIZE = 8 * 1024
         private const val VERSION_FILE_NAME = ".model_version"
+        private const val ASSETS_SUBDIR = "mobile_ocr"
 
         private val REQUIRED_ASSETS = listOf(
             ModelAsset("det.onnx", "d7fe3ea74652890722c0f4d02458b7261d9f5ae6c92904d05707c9eb155c7924", 4_748_769),
@@ -66,7 +62,7 @@ class ModelManager(private val context: Context) {
                 if (valid) {
                     target
                 } else {
-                    downloadAsset(asset, target)
+                    extractAsset(asset, target)
                 }
             }
 
@@ -99,23 +95,12 @@ class ModelManager(private val context: Context) {
         return storedVersion != MODEL_VERSION
     }
 
-    private fun downloadAsset(asset: ModelAsset, target: File): File {
-        val tempFile = File.createTempFile(asset.fileName, ".download", cacheDirectory)
-        var connection: HttpURLConnection? = null
+    private fun extractAsset(asset: ModelAsset, target: File): File {
+        val assetPath = "$ASSETS_SUBDIR/${asset.fileName}"
+        val tempFile = File.createTempFile(asset.fileName, ".extract", cacheDirectory)
+
         try {
-            connection = URL("$BASE_URL${asset.fileName}").openConnection() as HttpURLConnection
-            connection.connectTimeout = CONNECT_TIMEOUT_MS
-            connection.readTimeout = READ_TIMEOUT_MS
-            connection.requestMethod = "GET"
-            connection.instanceFollowRedirects = true
-
-            val responseCode = connection.responseCode
-            if (responseCode != HttpURLConnection.HTTP_OK) {
-                connection.disconnect()
-                throw IOException("Failed to download ${asset.fileName}: HTTP $responseCode")
-            }
-
-            connection.inputStream.use { input ->
+            context.assets.open(assetPath).use { input ->
                 FileOutputStream(tempFile).use { output ->
                     copyStream(input, output)
                 }
@@ -141,7 +126,6 @@ class ModelManager(private val context: Context) {
 
             return target
         } finally {
-            connection?.disconnect()
             if (tempFile.exists()) {
                 tempFile.delete()
             }
