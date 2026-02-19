@@ -1,0 +1,60 @@
+name: Build Windows
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Build type'
+        required: true
+        default: 'release'
+        type: choice
+        options:
+          - debug
+          - release
+      run_tests:
+        description: 'Run tests'
+        required: true
+        default: true
+        type: boolean
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.29.0'
+          channel: 'stable'
+
+      - name: Get dependencies
+        run: |
+          flutter pub get
+          cd example; flutter pub get
+
+      - name: Run analyzer
+        run: flutter analyze
+
+      - name: Run unit tests
+        if: inputs.run_tests
+        run: flutter test
+
+      - name: Build Windows app
+        working-directory: example
+        run: flutter build windows --${{ inputs.build_type }}
+
+      - name: Run integration tests
+        if: inputs.run_tests
+        working-directory: example
+        run: flutter test integration_test/linux_ocr_test.dart -d windows
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-${{ inputs.build_type }}-build
+          path: example/build/windows/x64/${{ inputs.build_type }}/runner/
+          retention-days: 7

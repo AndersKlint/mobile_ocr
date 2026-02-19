@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:image/image.dart' as img;
 import 'package:path_provider/path_provider.dart';
@@ -100,8 +101,7 @@ class DartMobileOcr extends MobileOcrPlatform {
       throw ArgumentError('Image file does not exist: $imagePath');
     }
 
-    final bytes = await file.readAsBytes();
-    final image = img.decodeImage(bytes);
+    final image = await _loadAndConvertImage(imagePath);
     if (image == null) {
       throw ArgumentError('Could not decode image: $imagePath');
     }
@@ -123,14 +123,61 @@ class DartMobileOcr extends MobileOcrPlatform {
       throw ArgumentError('Image file does not exist: $imagePath');
     }
 
-    final bytes = await file.readAsBytes();
-    final image = img.decodeImage(bytes);
+    final image = await _loadAndConvertImage(imagePath);
     if (image == null) {
       throw ArgumentError('Could not decode image: $imagePath');
     }
 
     final result = await _processor!.hasHighConfidenceText(image);
     return result.hasText;
+  }
+
+  Future<img.Image?> _loadAndConvertImage(String imagePath) async {
+    final file = File(imagePath);
+    var bytes = await file.readAsBytes();
+
+    // Check if it's a HEIC file (by extension)
+    final ext = imagePath.toLowerCase().split('.').last;
+    final isHeic = ext == 'heic' || ext == 'heif';
+
+    if (isHeic) {
+      // Convert HEIC to PNG using heif-convert command-line tool
+      final tempDir = await getTemporaryDirectory();
+      final outputPath =
+          '${tempDir.path}/converted_${DateTime.now().millisecondsSinceEpoch}.png';
+
+      try {
+        final result = await Process.run(
+          'heif-convert',
+          [imagePath, outputPath],
+          stdoutEncoding: utf8,
+          stderrEncoding: utf8,
+        );
+
+        if (result.exitCode != 0) {
+          throw Exception(
+            'HEIC conversion failed: ${result.stderr}\n'
+            'Please install heif-examples package (sudo apt install heif-examples)',
+          );
+        }
+
+        final convertedFile = File(outputPath);
+        if (await convertedFile.exists()) {
+          bytes = await convertedFile.readAsBytes();
+          await convertedFile.delete();
+        } else {
+          throw Exception('HEIC conversion failed: output file not created');
+        }
+      } catch (e) {
+        if (e is Exception) rethrow;
+        throw Exception(
+          'HEIC conversion error: $e\n'
+          'Please install heif-examples package (sudo apt install heif-examples)',
+        );
+      }
+    }
+
+    return img.decodeImage(bytes);
   }
 
   List<Map<dynamic, dynamic>> _convertResultToMap(OcrResult result) {
