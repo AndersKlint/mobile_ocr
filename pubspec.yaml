@@ -41,10 +41,11 @@ flutter:
       android:
         package: io.ente.mobile_ocr
         pluginClass: MobileOcrPlugin
-      ios:
-        pluginClass: MobileOcrPlugin
       linux:
         pluginClass: MobileOcrPlugin
+
+  assets:
+    - assets/mobile_ocr/
 
   # To add assets to your plugin package, add an assets section, like this:
   #

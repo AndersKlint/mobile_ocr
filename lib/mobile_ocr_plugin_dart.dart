@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:flutter/services.dart';
 import 'package:image/image.dart' as img;
 import 'package:path_provider/path_provider.dart';
 import '../mobile_ocr_plugin_platform_interface.dart';
@@ -15,10 +16,38 @@ class DartMobileOcr extends MobileOcrPlatform {
   bool _isInitializing = false;
 
   static const String _modelVersion = 'pp-ocrv5-202410';
+  static const List<String> _modelFiles = [
+    'det.onnx',
+    'rec.onnx',
+    'cls.onnx',
+    'ppocrv5_dict.txt',
+  ];
 
   static Future<String> _getModelsDirectory() async {
     final appDir = await getApplicationSupportDirectory();
     return '${appDir.path}/assets/mobile_ocr';
+  }
+
+  Future<void> _extractModelsFromAssets(String modelsDir) async {
+    final dir = Directory(modelsDir);
+    if (!await dir.exists()) {
+      await dir.create(recursive: true);
+    }
+
+    for (final modelFile in _modelFiles) {
+      final targetFile = File('$modelsDir/$modelFile');
+      if (!await targetFile.exists()) {
+        try {
+          final data = await rootBundle.load('assets/mobile_ocr/$modelFile');
+          await targetFile.writeAsBytes(
+            data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
+            flush: true,
+          );
+        } catch (_) {
+          // Model file not in assets, skip (may be optional like cls.onnx)
+        }
+      }
+    }
   }
 
   Future<void> _ensureInitialized() async {
@@ -34,6 +63,8 @@ class DartMobileOcr extends MobileOcrPlatform {
     try {
       final modelsDir = await _getModelsDirectory();
       _modelPath = modelsDir;
+
+      await _extractModelsFromAssets(modelsDir);
 
       final detectionModel = '$modelsDir/det.onnx';
       final recognitionModel = '$modelsDir/rec.onnx';
@@ -69,7 +100,7 @@ class DartMobileOcr extends MobileOcrPlatform {
 
   @override
   Future<String?> getPlatformVersion() async {
-    return 'Linux ${Platform.operatingSystemVersion}';
+    return '${Platform.operatingSystem} ${Platform.operatingSystemVersion}';
   }
 
   @override

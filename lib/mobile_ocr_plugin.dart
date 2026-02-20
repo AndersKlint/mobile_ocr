@@ -9,11 +9,6 @@ class MobileOcr {
     return MobileOcrPlatform.instance.getPlatformVersion();
   }
 
-  /// Ensure that the native OCR models required on Android are downloaded.
-  ///
-  /// Downloads any missing files, verifies checksums, and caches them on disk.
-  /// Returns a [ModelPreparationStatus] describing the cache status. This call
-  /// is a no-op on iOS because it relies on the Vision framework.
   Future<ModelPreparationStatus> prepareModels() async {
     final result = await MobileOcrPlatform.instance.prepareModels();
     return ModelPreparationStatus.fromMap(result);

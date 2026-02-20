@@ -13,7 +13,10 @@ abstract class MobileOcrPlatform extends PlatformInterface {
   static MobileOcrPlatform _instance = _createDefaultInstance();
 
   static MobileOcrPlatform _createDefaultInstance() {
-    if (Platform.isLinux || Platform.isMacOS || Platform.isWindows) {
+    if (Platform.isLinux ||
+        Platform.isMacOS ||
+        Platform.isWindows ||
+        Platform.isIOS) {
       return DartMobileOcr();
     }
     return MethodChannelMobileOcr();
@@ -21,8 +24,8 @@ abstract class MobileOcrPlatform extends PlatformInterface {
 
   /// The default instance of [MobileOcrPlatform] to use.
   ///
-  /// Defaults to [MethodChannelMobileOcr] on mobile platforms,
-  /// [DartMobileOcr] on desktop platforms.
+  /// Defaults to [MethodChannelMobileOcr] on Android,
+  /// [DartMobileOcr] on iOS, Linux, macOS, and Windows.
   static MobileOcrPlatform get instance => _instance;
 
   /// Platform-specific implementations should set this with their own

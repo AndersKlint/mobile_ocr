@@ -41,7 +41,10 @@ void main() {
   });
 
   test('Platform default instance is correct for current platform', () {
-    if (Platform.isLinux || Platform.isMacOS || Platform.isWindows) {
+    if (Platform.isLinux ||
+        Platform.isMacOS ||
+        Platform.isWindows ||
+        Platform.isIOS) {
       expect(initialPlatform, isInstanceOf<DartMobileOcr>());
     } else {
       expect(initialPlatform, isInstanceOf<MethodChannelMobileOcr>());
