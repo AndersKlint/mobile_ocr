@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile_ocr/mobile_ocr_plugin.dart';
 import 'package:mobile_ocr/mobile_ocr_plugin_platform_interface.dart';
-import 'package:mobile_ocr/mobile_ocr_plugin_method_channel.dart';
 import 'package:mobile_ocr/mobile_ocr_plugin_dart.dart';
 import 'package:mobile_ocr/models/text_block.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
@@ -40,15 +39,8 @@ void main() {
     MobileOcrPlatform.instance = initialPlatform;
   });
 
-  test('Platform default instance is correct for current platform', () {
-    if (Platform.isLinux ||
-        Platform.isMacOS ||
-        Platform.isWindows ||
-        Platform.isIOS) {
-      expect(initialPlatform, isInstanceOf<DartMobileOcr>());
-    } else {
-      expect(initialPlatform, isInstanceOf<MethodChannelMobileOcr>());
-    }
+  test('Platform default instance is DartMobileOcr', () {
+    expect(initialPlatform, isInstanceOf<DartMobileOcr>());
   });
 
   test('getPlatformVersion', () async {

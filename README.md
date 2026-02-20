@@ -1,18 +1,8 @@
 # Mobile OCR
 
 Mobile OCR is a Flutter plugin that delivers fully on-device text detection and
-recognition on Android, iOS, and Linux. The platforms share the same Dart API:
-
-- **Android (ONNX pipeline)** – A faithful port of the PaddleOCR v5 models,
-  executed with ONNX Runtime for high-accuracy OCR without network access.
-- **iOS (Apple Vision)** – Uses the system Vision framework, so no model
-  downloads are required and the plugin stays lightweight.
-- **Linux (Dart ONNX pipeline)** – Pure Dart implementation using ONNX Runtime
-  via FFI, with the same PaddleOCR v5 models.
-
-Everything below describes the Android/Linux pipeline unless explicitly noted. The
-iOS implementation returns the same JSON payload so the Dart surface remains
-identical.
+recognition across Android, iOS, Linux, macOS, and Windows. All platforms share
+the same Dart ONNX implementation using PaddleOCR v5 models.
 
 ## Features
 
@@ -21,7 +11,7 @@ identical.
 - Text angle classification and auto-rotation for skewed crops
 - On-device processing with no network calls
 - Multi-language character dictionary (Chinese + English)
-- Shared results structure across Android, iOS, and Linux
+- Pure Dart implementation - same code across all platforms
 
 ## Installation
 
@@ -31,7 +21,7 @@ Add this to your package's `pubspec.yaml` file:
 dependencies:
   mobile_ocr:
     git:
-      url: https://github.com/ente-io/mobile_ocr
+      url: https://github.com/AndersKlint/mobile_ocr
 ```
 
 ## Usage
@@ -44,11 +34,11 @@ import 'package:mobile_ocr/mobile_ocr_plugin.dart';
 // Create plugin instance
 final ocrPlugin = MobileOcr();
 
-// Android only: ensure ONNX models are extracted from bundled assets.
-// No-op on iOS because Vision ships with the OS.
+// Ensure ONNX models are extracted (done automatically on first use)
 await ocrPlugin.prepareModels();
 
-// Optional quick check if the image contains high-confidence text (runs much faster than actual full text recognition)
+// Optional quick check if the image contains high-confidence text
+// (runs much faster than full text recognition)
 final hasText = await ocrPlugin.hasText(
   imagePath: '/path/to/image.png',
 );
@@ -73,8 +63,8 @@ Each `TextBlock` mirrors the shape produced by the PaddleOCR detector:
 
 - `text` – recognized string
 - `confidence` – recognition probability (0–1)
-- `points` – four corner points (clockwise) describing the oriented quadrilateral; the sample app uses these to draw rotated boxes exactly as they appear in the source image
-- `boundingBox` – convenience `Rect` derived from the polygon for quick overlays or cropping
+- `points` – four corner points (clockwise) describing the oriented quadrilateral
+- `boundingBox` – convenience `Rect` derived from the polygon for quick overlays
 
 ### Using with Image Picker
 
@@ -85,7 +75,6 @@ final ImagePicker picker = ImagePicker();
 final XFile? image = await picker.pickImage(source: ImageSource.gallery);
 
 if (image != null) {
-  await ocrPlugin.prepareModels(); // Android: ensure models are extracted (no-op on iOS)
   final result = await ocrPlugin.detectText(imagePath: image.path);
   // Process results...
 }
@@ -99,7 +88,6 @@ The plugin includes a comprehensive example app that demonstrates:
 - Running OCR on selected images
 - Displaying detected text regions with colored overlays
 - Tapping on text regions to view and copy the recognized text
-- Toggle text overlay visibility
 
 To run the example:
 
@@ -108,13 +96,17 @@ cd example
 flutter run
 ```
 
-## Android Model Assets (ONNX)
+## Model Assets
 
-The ONNX models (~21 MB total) are bundled with the plugin in `android/src/main/assets/mobile_ocr/`.
-On first use, `prepareModels()` extracts them from the APK to `context.filesDir/assets/mobile_ocr/`
-with SHA-256 verification. This ensures the app works offline immediately after installation.
+The ONNX models (~21 MB total) are bundled with the plugin in `assets/mobile_ocr/`:
 
-iOS does not require this step because it relies on the built-in Vision framework.
+- `det.onnx` (4.6 MB) - Text detection model
+- `rec.onnx` (16 MB) - Text recognition model
+- `cls.onnx` (570 KB) - Text angle classification model
+- `ppocrv5_dict.txt` (73 KB) - Character dictionary
+
+On first use, `prepareModels()` extracts them to the application support directory.
+This ensures the app works offline immediately after installation.
 
 ## Platform Support
 
@@ -123,32 +115,16 @@ Currently supports:
 - ✅ Android (API 24+)
 - ✅ iOS 14+
 - ✅ Linux
+- ✅ macOS
+- ✅ Windows
 
-### Linux Setup
-
-On Linux, the plugin uses a pure Dart implementation with ONNX Runtime via FFI.
-You need to bundle the models with your application:
-
-1. Create a `assets/mobile_ocr/` directory in your app
-2. Copy the model files from `android/src/main/assets/mobile_ocr/`:
-   - `det.onnx` (4.6 MB)
-   - `rec.onnx` (16 MB)
-   - `cls.onnx` (570 KB)
-   - `ppocrv5_dict.txt` (73 KB)
-3. Add to your `pubspec.yaml`:
-
-```yaml
-flutter:
-  assets:
-    - assets/mobile_ocr/
-```
-
-The models will be extracted to the application support directory on first use.
+All platforms use the same pure Dart ONNX implementation via `onnxruntime_v2`.
 
 ## Acknowledgments
 
 This work would not be possible without:
 
+- [Ente Mobile OCR](https://github.com/ente-io/mobile_ocr) - Original plugin this was forked from
 - [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR) - The original OCR models and algorithms
 - [OnnxOCR](https://github.com/jingsongliujing/OnnxOCR) - ONNX implementation and pipeline architecture
 

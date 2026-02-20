@@ -1,31 +1,14 @@
-import 'dart:io';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
-import 'mobile_ocr_plugin_method_channel.dart';
 import 'mobile_ocr_plugin_dart.dart';
 
 abstract class MobileOcrPlatform extends PlatformInterface {
-  /// Constructs a MobileOcrPlatform.
   MobileOcrPlatform() : super(token: _token);
 
   static final Object _token = Object();
 
-  static MobileOcrPlatform _instance = _createDefaultInstance();
+  static MobileOcrPlatform _instance = DartMobileOcr();
 
-  static MobileOcrPlatform _createDefaultInstance() {
-    if (Platform.isLinux ||
-        Platform.isMacOS ||
-        Platform.isWindows ||
-        Platform.isIOS) {
-      return DartMobileOcr();
-    }
-    return MethodChannelMobileOcr();
-  }
-
-  /// The default instance of [MobileOcrPlatform] to use.
-  ///
-  /// Defaults to [MethodChannelMobileOcr] on Android,
-  /// [DartMobileOcr] on iOS, Linux, macOS, and Windows.
   static MobileOcrPlatform get instance => _instance;
 
   /// Platform-specific implementations should set this with their own
