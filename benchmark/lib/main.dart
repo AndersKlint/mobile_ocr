@@ -98,7 +98,8 @@ class _OcrBenchmarkPageState extends State<OcrBenchmarkPage> {
     'assets/test_ocr/text_photos.jpeg',
   ];
 
-  static const int _iterations = 5;
+  static const int _iterations = 20;
+  static const int _totalCooldownSeconds = 120;
 
   static bool get _isDesktop =>
       Platform.isLinux || Platform.isWindows || Platform.isMacOS;
@@ -648,7 +649,7 @@ class _OcrBenchmarkPageState extends State<OcrBenchmarkPage> {
 
       setState(() {
         _coolingDown = true;
-        _coolingDownSeconds = 10;
+        _coolingDownSeconds = _totalCooldownSeconds;
       });
 
       for (int i = _coolingDownSeconds; i > 0; i--) {

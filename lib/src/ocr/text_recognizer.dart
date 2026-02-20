@@ -252,6 +252,8 @@ class TextRecognizer {
 
         if (startRatio < 0.0) startRatio = 0.0;
         if (endRatio < startRatio) endRatio = startRatio;
+        if (startRatio > 1.0) startRatio = 1.0;
+        if (endRatio > 1.0) endRatio = 1.0;
 
         if (endRatio - startRatio < minSpan) {
           endRatio = startRatio + minSpan;
