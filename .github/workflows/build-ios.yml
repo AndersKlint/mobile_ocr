@@ -2,15 +2,6 @@ name: Build iOS
 
 on:
   workflow_dispatch:
-    inputs:
-      build_type:
-        description: 'Build type'
-        required: true
-        default: 'release'
-        type: choice
-        options:
-          - debug
-          - release
 
 jobs:
   build-ios:
@@ -31,17 +22,11 @@ jobs:
           flutter pub get
           cd example && flutter pub get
 
-      - name: Build iOS
-        working-directory: example
-        run: flutter build ios --${{ inputs.build_type }} --simulator --no-codesign
-
       - name: Boot iOS Simulator and run integration tests
         working-directory: example
         run: |
-          # Get the first available iPhone simulator and boot it
           SIMULATOR_ID=$(xcrun simctl list devices available | grep -m 1 "iPhone" | grep -oE '[0-9A-F-]{36}')
           if [ -z "$SIMULATOR_ID" ]; then
-            # Get available runtime and device type, then create simulator
             RUNTIME=$(xcrun simctl list runtimes | grep -m 1 "iOS" | grep -oE 'com\.apple\.CoreSimulator\.SimRuntime\.iOS-[0-9-]+')
             DEVICETYPE=$(xcrun simctl list devicetypes | grep -m 1 "iPhone" | grep -oE 'com\.apple\.CoreSimulator\.SimDeviceType\.iPhone-[A-Za-z0-9-]+')
             SIMULATOR_ID=$(xcrun simctl create "Test iPhone" "$DEVICETYPE" "$RUNTIME")
@@ -55,6 +40,6 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ios-${{ inputs.build_type }}-build
+          name: ios-debug-build
           path: example/build/ios/iphonesimulator/
           retention-days: 7
