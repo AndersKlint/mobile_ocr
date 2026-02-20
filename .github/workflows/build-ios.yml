@@ -35,6 +35,22 @@ jobs:
         working-directory: example
         run: flutter build ios --${{ inputs.build_type }} --simulator --no-codesign
 
+      - name: Boot iOS Simulator and run integration tests
+        working-directory: example
+        run: |
+          # List available simulators and pick one
+          DEVICE=$(flutter devices | grep -m 1 "simulator" | awk '{print $1}')
+          if [ -z "$DEVICE" ]; then
+            echo "No simulator found, creating one..."
+            SIMULATOR_ID=$(xcrun simctl create "iPhone 16" "com.apple.CoreSimulator.SimDeviceType.iPhone-16" "com.apple.CoreSimulator.SimRuntime.iOS-18-2")
+            xcrun simctl boot "$SIMULATOR_ID"
+            open -a Simulator
+            sleep 10
+            DEVICE=$(flutter devices | grep -m 1 "simulator" | awk '{print $1}')
+          fi
+          echo "Using device: $DEVICE"
+          flutter test integration_test/linux_ocr_test.dart -d "$DEVICE"
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:

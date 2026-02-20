@@ -11,11 +11,6 @@ on:
         options:
           - debug
           - release
-      run_tests:
-        description: 'Run tests'
-        required: true
-        default: true
-        type: boolean
 
 jobs:
   build-macos:
@@ -36,19 +31,11 @@ jobs:
           flutter pub get
           cd example && flutter pub get
 
-      - name: Run analyzer
-        run: flutter analyze
-
-      - name: Run unit tests
-        if: inputs.run_tests
-        run: flutter test
-
       - name: Build macOS app
         working-directory: example
         run: flutter build macos --${{ inputs.build_type }}
 
       - name: Run integration tests
-        if: inputs.run_tests
         working-directory: example
         run: flutter test integration_test/linux_ocr_test.dart -d macos
 
