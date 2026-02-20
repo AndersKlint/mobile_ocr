@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/services.dart';
@@ -167,46 +166,7 @@ class DartMobileOcr extends MobileOcrPlatform {
 
   Future<img.Image?> _loadAndConvertImage(String imagePath) async {
     final file = File(imagePath);
-    Uint8List bytes = await file.readAsBytes();
-
-    final ext = imagePath.toLowerCase().split('.').last;
-    final isHeic = ext == 'heic' || ext == 'heif';
-
-    if (isHeic) {
-      final tempDir = await getTemporaryDirectory();
-      final outputPath =
-          '${tempDir.path}/converted_${DateTime.now().millisecondsSinceEpoch}.png';
-
-      try {
-        final result = await Process.run(
-          'heif-convert',
-          [imagePath, outputPath],
-          stdoutEncoding: utf8,
-          stderrEncoding: utf8,
-        );
-
-        if (result.exitCode != 0) {
-          throw Exception(
-            'HEIC conversion failed: ${result.stderr}\n'
-            'Please install heif-examples package (sudo apt install heif-examples)',
-          );
-        }
-
-        final convertedFile = File(outputPath);
-        if (await convertedFile.exists()) {
-          bytes = await convertedFile.readAsBytes();
-          await convertedFile.delete();
-        } else {
-          throw Exception('HEIC conversion failed: output file not created');
-        }
-      } catch (e) {
-        if (e is Exception) rethrow;
-        throw Exception(
-          'HEIC conversion error: $e\n'
-          'Please install heif-examples package (sudo apt install heif-examples)',
-        );
-      }
-    }
+    final bytes = await file.readAsBytes();
 
     final image = await FastImageLoader.loadFromBytes(bytes);
     if (image == null) {
