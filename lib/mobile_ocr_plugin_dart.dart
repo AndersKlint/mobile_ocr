@@ -37,7 +37,9 @@ class DartMobileOcr extends MobileOcrPlatform {
       final targetFile = File('$modelsDir/$modelFile');
       if (!await targetFile.exists()) {
         try {
-          final data = await rootBundle.load('assets/mobile_ocr/$modelFile');
+          final data = await rootBundle.load(
+            'packages/mobile_ocr/assets/mobile_ocr/$modelFile',
+          );
           await targetFile.writeAsBytes(
             data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
             flush: true,
