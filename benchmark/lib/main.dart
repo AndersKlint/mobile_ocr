@@ -648,7 +648,7 @@ class _OcrBenchmarkPageState extends State<OcrBenchmarkPage> {
 
       setState(() {
         _coolingDown = true;
-        _coolingDownSeconds = 20;
+        _coolingDownSeconds = 10;
       });
 
       for (int i = _coolingDownSeconds; i > 0; i--) {

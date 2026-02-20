@@ -1,10 +1,12 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:image/image.dart' as img;
 import 'package:path_provider/path_provider.dart';
 import '../mobile_ocr_plugin_platform_interface.dart';
 import '../src/ocr/ocr_processor.dart';
 import '../src/ocr/types.dart';
+import '../src/ocr/fast_image_loader.dart';
 
 class DartMobileOcr extends MobileOcrPlatform {
   OcrProcessor? _processor;
@@ -134,14 +136,12 @@ class DartMobileOcr extends MobileOcrPlatform {
 
   Future<img.Image?> _loadAndConvertImage(String imagePath) async {
     final file = File(imagePath);
-    var bytes = await file.readAsBytes();
+    Uint8List bytes = await file.readAsBytes();
 
-    // Check if it's a HEIC file (by extension)
     final ext = imagePath.toLowerCase().split('.').last;
     final isHeic = ext == 'heic' || ext == 'heif';
 
     if (isHeic) {
-      // Convert HEIC to PNG using heif-convert command-line tool
       final tempDir = await getTemporaryDirectory();
       final outputPath =
           '${tempDir.path}/converted_${DateTime.now().millisecondsSinceEpoch}.png';
@@ -177,7 +177,11 @@ class DartMobileOcr extends MobileOcrPlatform {
       }
     }
 
-    return img.decodeImage(bytes);
+    final image = await FastImageLoader.loadFromBytes(bytes);
+    if (image == null) {
+      return img.decodeImage(bytes);
+    }
+    return image;
   }
 
   List<Map<dynamic, dynamic>> _convertResultToMap(OcrResult result) {

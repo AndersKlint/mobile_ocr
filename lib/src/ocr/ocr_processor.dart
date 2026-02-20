@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_onnxruntime/flutter_onnxruntime.dart';
+import 'package:onnxruntime_v2/onnxruntime_v2.dart';
 import 'package:image/image.dart' as img;
 import 'types.dart';
 import 'image_utils.dart';
@@ -46,13 +46,32 @@ class OcrProcessor {
     required String dictionaryPath,
     bool useAngleClassification = true,
   }) async {
-    final ort = OnnxRuntime();
+    OrtEnv.instance.init();
 
-    final detectionSession = await ort.createSession(detectionModelPath);
-    final recognitionSession = await ort.createSession(recognitionModelPath);
+    final sessionOptions = OrtSessionOptions();
+    sessionOptions.appendDefaultProviders();
+
+    final detectionBytes = await File(detectionModelPath).readAsBytes();
+    final detectionSession = OrtSession.fromBuffer(
+      detectionBytes,
+      sessionOptions,
+    );
+
+    final recognitionBytes = await File(recognitionModelPath).readAsBytes();
+    final recognitionSession = OrtSession.fromBuffer(
+      recognitionBytes,
+      sessionOptions,
+    );
+
     OrtSession? classificationSession;
     if (useAngleClassification && classificationModelPath != null) {
-      classificationSession = await ort.createSession(classificationModelPath);
+      final classificationBytes = await File(
+        classificationModelPath,
+      ).readAsBytes();
+      classificationSession = OrtSession.fromBuffer(
+        classificationBytes,
+        sessionOptions,
+      );
     }
 
     final dictFile = File(dictionaryPath);
@@ -390,8 +409,9 @@ class OcrProcessor {
   }
 
   Future<void> close() async {
-    await detectionSession.close();
-    await recognitionSession.close();
-    await classificationSession?.close();
+    detectionSession.release();
+    recognitionSession.release();
+    classificationSession?.release();
+    OrtEnv.instance.release();
   }
 }

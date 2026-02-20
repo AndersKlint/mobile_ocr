@@ -1,10 +1,11 @@
 import 'dart:math' as math;
 import 'dart:typed_data';
-import 'package:flutter/foundation.dart';
-import 'package:flutter_onnxruntime/flutter_onnxruntime.dart';
+import 'package:onnxruntime_v2/onnxruntime_v2.dart';
 import 'package:image/image.dart' as img;
 import 'types.dart';
 import 'image_utils.dart';
+import 'fast_image_loader.dart';
+import 'fast_tensor_reader.dart';
 
 class TextDetector {
   static const int limitSideLen = 960;
@@ -77,23 +78,28 @@ class TextDetector {
 
     try {
       final inputs = {'x': inputTensor};
-      final outputs = await session.run(inputs);
-      final output = outputs.values.first;
+      final runOptions = OrtRunOptions();
+      final outputs = session.run(runOptions, inputs);
+      runOptions.release();
+      final output = outputs[0];
 
-      await postprocessDetection(
-        output: output,
-        originalWidth: originalWidth,
-        originalHeight: originalHeight,
-        resizedWidth: resizedWidth,
-        resizedHeight: resizedHeight,
-        handler: handler,
-      );
+      if (output != null) {
+        await postprocessDetection(
+          output: output,
+          originalWidth: originalWidth,
+          originalHeight: originalHeight,
+          resizedWidth: resizedWidth,
+          resizedHeight: resizedHeight,
+          handler: handler,
+        );
+        output.release();
+      }
     } finally {
-      await inputTensor.dispose();
+      inputTensor.release();
     }
   }
 
-  Future<(OrtValue, int, int)> preprocessImage(img.Image bitmap) async {
+  Future<(OrtValueTensor, int, int)> preprocessImage(img.Image bitmap) async {
     final originalWidth = bitmap.width;
     final originalHeight = bitmap.height;
 
@@ -101,38 +107,27 @@ class TextDetector {
     final resizedWidth = resizeDims.$1;
     final resizedHeight = resizeDims.$2;
 
-    final resized = img.copyResize(
-      bitmap,
-      width: resizedWidth,
-      height: resizedHeight,
-      interpolation: img.Interpolation.linear,
-    );
-
-    final inputArray = Float32List(1 * 3 * resizedHeight * resizedWidth);
-
     final mean = [0.485, 0.456, 0.406];
     final std = [0.229, 0.224, 0.225];
-    const scale = 1.0 / 255.0;
 
-    for (int y = 0; y < resizedHeight; y++) {
-      for (int x = 0; x < resizedWidth; x++) {
-        final pixel = resized.getPixel(x, y);
-        final b = pixel.b.toDouble() * scale;
-        final g = pixel.g.toDouble() * scale;
-        final r = pixel.r.toDouble() * scale;
+    final inputArray = await FastImageLoader.imageToTensor(
+      bitmap,
+      targetWidth: resizedWidth,
+      targetHeight: resizedHeight,
+      mean: mean,
+      std: std,
+      bgrOrder: true,
+    );
 
-        final pixelIndex = y * resizedWidth + x;
-
-        inputArray[pixelIndex] = (b - mean[0]) / std[0];
-        inputArray[pixelIndex + resizedHeight * resizedWidth] =
-            (g - mean[1]) / std[1];
-        inputArray[pixelIndex + 2 * resizedHeight * resizedWidth] =
-            (r - mean[2]) / std[2];
-      }
+    if (inputArray == null) {
+      throw StateError('Failed to preprocess image');
     }
 
     final shape = [1, 3, resizedHeight, resizedWidth];
-    final inputTensor = await OrtValue.fromList(inputArray, shape);
+    final inputTensor = OrtValueTensor.createTensorWithDataList(
+      inputArray,
+      shape,
+    );
 
     return (inputTensor, resizedWidth, resizedHeight);
   }
@@ -158,19 +153,15 @@ class TextDetector {
     required int resizedHeight,
     required bool Function(TextBox, double) handler,
   }) async {
-    final outputData = await output.asFlattenedList();
-
-    final probMap = List.generate(
-      resizedHeight,
-      (y) => List.generate(resizedWidth, (x) {
-        final idx = y * resizedWidth + x;
-        return (outputData[idx] as num).toDouble();
-      }),
-    );
+    final prob = FastTensorReader.asFloat32List(output);
+    if (prob == null || prob.isEmpty) return;
 
     final binaryMap = List.generate(
       resizedHeight,
-      (y) => List.generate(resizedWidth, (x) => probMap[y][x] > thresh),
+      (y) => List.generate(resizedWidth, (x) {
+        final idx = y * resizedWidth + x;
+        return idx < prob.length && prob[idx] > thresh;
+      }),
     );
 
     final components = extractConnectedComponents(binaryMap)
@@ -190,7 +181,7 @@ class TextDetector {
       final rect = minimumAreaRectangle(hull, pointsAreConvex: true);
       if (rect.isEmpty) continue;
 
-      final score = calculateBoxScore(probMap, rect);
+      final score = calculateBoxScore(prob, resizedWidth, resizedHeight, rect);
       if (score < boxThresh) continue;
 
       final unclippedPolygon = unclipBox(rect, unclipRatio);
@@ -266,7 +257,12 @@ class TextDetector {
     return components;
   }
 
-  double calculateBoxScore(List<List<double>> probMap, List<Point> polygon) {
+  double calculateBoxScore(
+    Float32List prob,
+    int width,
+    int height,
+    List<Point> polygon,
+  ) {
     if (polygon.isEmpty) return 0;
 
     var minX = polygon.map((p) => p.x).reduce(math.min).floor();
@@ -274,10 +270,10 @@ class TextDetector {
     var minY = polygon.map((p) => p.y).reduce(math.min).floor();
     var maxY = polygon.map((p) => p.y).reduce(math.max).ceil();
 
-    minX = minX.clamp(0, probMap[0].length - 1);
-    maxX = maxX.clamp(0, probMap[0].length - 1);
-    minY = minY.clamp(0, probMap.length - 1);
-    maxY = maxY.clamp(0, probMap.length - 1);
+    minX = minX.clamp(0, width - 1);
+    maxX = maxX.clamp(0, width - 1);
+    minY = minY.clamp(0, height - 1);
+    maxY = maxY.clamp(0, height - 1);
 
     if (maxX < minX || maxY < minY) return 0;
 
@@ -287,7 +283,7 @@ class TextDetector {
     for (int y = minY; y <= maxY; y++) {
       for (int x = minX; x <= maxX; x++) {
         if (isPointInsideQuad(x + 0.5, y + 0.5, polygon)) {
-          sum += probMap[y][x];
+          sum += prob[y * width + x];
           count++;
         }
       }

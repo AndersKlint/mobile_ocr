@@ -4,11 +4,11 @@
 
 list(APPEND FLUTTER_PLUGIN_LIST
   file_selector_linux
-  flutter_onnxruntime
   mobile_ocr
 )
 
 list(APPEND FLUTTER_FFI_PLUGIN_LIST
+  onnxruntime_v2
 )
 
 set(PLUGIN_BUNDLED_LIBRARIES)

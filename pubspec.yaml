@@ -12,8 +12,9 @@ dependencies:
     sdk: flutter
   plugin_platform_interface: ^2.0.2
   path_provider: ^2.1.0
-  flutter_onnxruntime: ^1.6.3
+  onnxruntime_v2: ^1.23.2
   image: ^4.0.0
+  ffi: ^2.1.0
 
 dev_dependencies:
   flutter_test:

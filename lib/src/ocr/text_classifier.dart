@@ -1,6 +1,7 @@
 import 'dart:typed_data';
-import 'package:flutter_onnxruntime/flutter_onnxruntime.dart';
+import 'package:onnxruntime_v2/onnxruntime_v2.dart';
 import 'package:image/image.dart' as img;
+import 'fast_tensor_reader.dart';
 
 class ClassificationOutput {
   final img.Image bitmap;
@@ -56,16 +57,24 @@ class TextClassifier {
     }
 
     final shape = [batchSz, 3, imgHeight, imgWidth];
-    final inputTensor = await OrtValue.fromList(inputArray, shape);
+    final inputTensor = OrtValueTensor.createTensorWithDataList(
+      inputArray,
+      shape,
+    );
 
     final inputs = {session.inputNames.first: inputTensor};
-    final outputs = await session.run(inputs);
-    final output = outputs.values.first;
+    final runOptions = OrtRunOptions();
+    final outputs = session.run(runOptions, inputs);
+    runOptions.release();
+    final output = outputs[0];
 
-    final results = await decodeOutput(output, batchSz);
+    List<bool> results = [];
+    if (output != null) {
+      results = decodeOutput(output, batchSz);
+      output.release();
+    }
 
-    await inputTensor.dispose();
-    await output.dispose();
+    inputTensor.release();
 
     return results;
   }
@@ -115,14 +124,18 @@ class TextClassifier {
     }
   }
 
-  Future<List<bool>> decodeOutput(OrtValue output, int batchSz) async {
-    final outputData = await output.asFlattenedList();
+  List<bool> decodeOutput(OrtValue output, int batchSz) {
+    final flatData = FastTensorReader.asFloat32List(output);
+    if (flatData == null || flatData.isEmpty) return [];
+
     final results = <bool>[];
 
     for (int b = 0; b < batchSz; b++) {
       final baseOffset = b * 2;
-      final prob0 = (outputData[baseOffset] as num).toDouble();
-      final prob180 = (outputData[baseOffset + 1] as num).toDouble();
+      if (baseOffset + 1 >= flatData.length) break;
+
+      final prob0 = flatData[baseOffset];
+      final prob180 = flatData[baseOffset + 1];
 
       final shouldRotate = prob180 > prob0 && prob180 > clsThresh;
       results.add(shouldRotate);

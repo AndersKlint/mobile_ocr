@@ -1,7 +1,9 @@
 import 'dart:typed_data';
-import 'package:flutter_onnxruntime/flutter_onnxruntime.dart';
+import 'package:onnxruntime_v2/onnxruntime_v2.dart';
 import 'package:image/image.dart' as img;
 import 'types.dart';
+import 'fast_image_loader.dart';
+import 'fast_tensor_reader.dart';
 
 class TextRecognizer {
   static const int imgHeight = 48;
@@ -62,7 +64,7 @@ class TextRecognizer {
 
     final contentWidths = List<int>.filled(batchSz, 0);
     for (int index = 0; index < batchImages.length; index++) {
-      contentWidths[index] = preprocessImage(
+      contentWidths[index] = await preprocessImage(
         batchImages[index],
         inputArray,
         index,
@@ -71,66 +73,67 @@ class TextRecognizer {
     }
 
     final shape = [batchSz, 3, imgHeight, targetWidth];
-    final inputTensor = await OrtValue.fromList(inputArray, shape);
-
-    final inputs = {session.inputNames.first: inputTensor};
-    final outputs = await session.run(inputs);
-    final output = outputs.values.first;
-
-    final results = await decodeOutput(
-      output,
-      batchSz,
-      contentWidths,
-      targetWidth,
+    final inputTensor = OrtValueTensor.createTensorWithDataList(
+      inputArray,
+      shape,
     );
 
-    await inputTensor.dispose();
-    await output.dispose();
+    final inputs = {session.inputNames.first: inputTensor};
+    final runOptions = OrtRunOptions();
+    final outputs = session.run(runOptions, inputs);
+    runOptions.release();
+    final output = outputs[0];
+
+    List<RecognitionResult> results = [];
+    if (output != null) {
+      results = decodeOutput(output, batchSz, contentWidths, targetWidth);
+      output.release();
+    }
+
+    inputTensor.release();
 
     return results;
   }
 
-  int preprocessImage(
+  Future<int> preprocessImage(
     img.Image bitmap,
     Float32List outputArray,
     int batchIndex,
     int targetWidth,
-  ) {
+  ) async {
     final aspectRatio = bitmap.width / bitmap.height;
     final resizedWidth = (imgHeight * aspectRatio).ceil().clamp(1, targetWidth);
 
-    final resized = img.copyResize(
+    final mean = [0.5, 0.5, 0.5];
+    final std = [0.5, 0.5, 0.5];
+
+    final tensor = await FastImageLoader.imageToTensor(
       bitmap,
-      width: resizedWidth,
-      height: imgHeight,
-      interpolation: img.Interpolation.linear,
+      targetWidth: resizedWidth,
+      targetHeight: imgHeight,
+      mean: mean,
+      std: std,
+      bgrOrder: true,
     );
+
+    if (tensor == null) {
+      return 0;
+    }
 
     final baseOffset = batchIndex * 3 * imgHeight * targetWidth;
     final channelStride = imgHeight * targetWidth;
+    final resizedChannelStride = imgHeight * resizedWidth;
 
-    for (int y = 0; y < imgHeight; y++) {
-      final rowOffset = y * targetWidth;
-
-      for (int x = 0; x < targetWidth; x++) {
-        final pixelIndex = rowOffset + x;
-
-        if (x < resizedWidth) {
-          final pixel = resized.getPixel(x, y);
-          final r = pixel.r.toDouble() / 255.0;
-          final g = pixel.g.toDouble() / 255.0;
-          final b = pixel.b.toDouble() / 255.0;
-
-          // BGR order to match Kotlin/Android
-          outputArray[baseOffset + pixelIndex] = (b - 0.5) / 0.5;
-          outputArray[baseOffset + channelStride + pixelIndex] =
-              (g - 0.5) / 0.5;
-          outputArray[baseOffset + 2 * channelStride + pixelIndex] =
-              (r - 0.5) / 0.5;
-        } else {
-          outputArray[baseOffset + pixelIndex] = 0;
-          outputArray[baseOffset + channelStride + pixelIndex] = 0;
-          outputArray[baseOffset + 2 * channelStride + pixelIndex] = 0;
+    for (int c = 0; c < 3; c++) {
+      for (int y = 0; y < imgHeight; y++) {
+        for (int x = 0; x < targetWidth; x++) {
+          final dstIdx = baseOffset + c * channelStride + y * targetWidth + x;
+          if (x < resizedWidth) {
+            final srcIdx = c * resizedChannelStride + y * resizedWidth + x;
+            outputArray[dstIdx] = tensor[srcIdx];
+          } else {
+            outputArray[dstIdx] = 0;
+          }
         }
       }
     }
@@ -138,37 +141,40 @@ class TextRecognizer {
     return resizedWidth;
   }
 
-  Future<List<RecognitionResult>> decodeOutput(
+  List<RecognitionResult> decodeOutput(
     OrtValue output,
     int batchSz,
     List<int> contentWidths,
     int targetWidth,
-  ) async {
-    final outputData = await output.asFlattenedList();
-    final shape = output.shape;
+  ) {
+    final flatData = FastTensorReader.asFloat32List(output);
+    if (flatData == null || flatData.isEmpty) return [];
+
+    final shape = FastTensorReader.getShape(output);
+    if (shape.length < 3) return [];
+
     final seqLen = shape[1];
     final vocabSize = shape[2];
+    if (seqLen == 0 || vocabSize == 0) return [];
 
     final results = <RecognitionResult>[];
+    final seqStride = seqLen * vocabSize;
+    final vocabStride = vocabSize;
 
     for (int b = 0; b < batchSz; b++) {
-      final batchOffset = b * seqLen * vocabSize;
+      final batchOffset = b * seqStride;
 
-      final charIndices = List<int>.filled(seqLen, 0);
-      final probs = List<double>.filled(seqLen, 0);
+      final charIndices = Int32List(seqLen);
+      final probs = Float64List(seqLen);
 
       for (int t = 0; t < seqLen; t++) {
-        final timeOffset = batchOffset + t * vocabSize;
+        final timeOffset = batchOffset + t * vocabStride;
 
-        var maxProb = (outputData[timeOffset] as num).toDouble();
+        var maxProb = flatData[timeOffset];
         var maxIndex = 0;
 
         for (int c = 1; c < vocabSize; c++) {
-          final idx = timeOffset + c;
-          if (idx >= outputData.length) {
-            break;
-          }
-          final prob = (outputData[idx] as num).toDouble();
+          final prob = flatData[timeOffset + c];
           if (prob > maxProb) {
             maxProb = prob;
             maxIndex = c;
@@ -179,7 +185,7 @@ class TextRecognizer {
         probs[t] = maxProb;
       }
 
-      final contentWidth = contentWidths[b] > 0
+      final contentWidth = b < contentWidths.length && contentWidths[b] > 0
           ? contentWidths[b]
           : targetWidth;
       final scaleFactor = contentWidth >= targetWidth
@@ -194,8 +200,8 @@ class TextRecognizer {
   }
 
   RecognitionResult ctcDecode(
-    List<int> charIndices,
-    List<double> probs,
+    Int32List charIndices,
+    Float64List probs,
     double scale,
   ) {
     final seqLen = charIndices.length;
@@ -207,6 +213,9 @@ class TextRecognizer {
     final decodedChars = <String>[];
     final decodedProbs = <double>[];
     final spans = <CharacterSpan>[];
+
+    final invSeqLen = 1.0 / seqLen;
+    final dictLength = characterDict.length;
 
     int t = 0;
     while (t < seqLen) {
@@ -222,31 +231,34 @@ class TextRecognizer {
       var probSum = probs[t];
       var count = 1;
 
-      while (end < seqLen && charIndices[end] == currentIndex) {
+      final currentIdx = currentIndex;
+      while (end < seqLen && charIndices[end] == currentIdx) {
         probSum += probs[end];
         end++;
         count++;
       }
 
-      if (currentIndex < characterDict.length) {
+      if (currentIndex < dictLength) {
         final character = characterDict[currentIndex];
         decodedChars.add(character);
 
         final meanProb = probSum / count;
         decodedProbs.add(meanProb);
 
-        final minSpan = ((1 / seqLen) * safeScale).clamp(minSpanRatio, 1.0);
+        final minSpan = (invSeqLen * safeScale).clamp(minSpanRatio, 1.0);
 
-        var startRatio = (start / seqLen) * safeScale;
-        var endRatio = (end / seqLen) * safeScale;
+        var startRatio = (start * invSeqLen) * safeScale;
+        var endRatio = (end * invSeqLen) * safeScale;
 
-        startRatio = startRatio.clamp(0.0, 1.0);
-        endRatio = endRatio.clamp(startRatio, 1.0);
+        if (startRatio < 0.0) startRatio = 0.0;
+        if (endRatio < startRatio) endRatio = startRatio;
 
         if (endRatio - startRatio < minSpan) {
-          endRatio = (startRatio + minSpan).clamp(0.0, 1.0);
-          if (endRatio - startRatio < minSpan) {
-            startRatio = (endRatio - minSpan).clamp(0.0, 1.0);
+          endRatio = startRatio + minSpan;
+          if (endRatio > 1.0) {
+            endRatio = 1.0;
+            startRatio = endRatio - minSpan;
+            if (startRatio < 0.0) startRatio = 0.0;
           }
         }
 
