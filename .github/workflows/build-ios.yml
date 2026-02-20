@@ -38,18 +38,19 @@ jobs:
       - name: Boot iOS Simulator and run integration tests
         working-directory: example
         run: |
-          # List available simulators and pick one
-          DEVICE=$(flutter devices | grep -m 1 "simulator" | awk '{print $1}')
-          if [ -z "$DEVICE" ]; then
-            echo "No simulator found, creating one..."
-            SIMULATOR_ID=$(xcrun simctl create "iPhone 16" "com.apple.CoreSimulator.SimDeviceType.iPhone-16" "com.apple.CoreSimulator.SimRuntime.iOS-18-2")
-            xcrun simctl boot "$SIMULATOR_ID"
-            open -a Simulator
-            sleep 10
-            DEVICE=$(flutter devices | grep -m 1 "simulator" | awk '{print $1}')
+          # Get the first available iPhone simulator and boot it
+          SIMULATOR_ID=$(xcrun simctl list devices available | grep -m 1 "iPhone" | grep -oE '[0-9A-F-]{36}')
+          if [ -z "$SIMULATOR_ID" ]; then
+            # Get available runtime and device type, then create simulator
+            RUNTIME=$(xcrun simctl list runtimes | grep -m 1 "iOS" | grep -oE 'com\.apple\.CoreSimulator\.SimRuntime\.iOS-[0-9-]+')
+            DEVICETYPE=$(xcrun simctl list devicetypes | grep -m 1 "iPhone" | grep -oE 'com\.apple\.CoreSimulator\.SimDeviceType\.iPhone-[A-Za-z0-9-]+')
+            SIMULATOR_ID=$(xcrun simctl create "Test iPhone" "$DEVICETYPE" "$RUNTIME")
           fi
-          echo "Using device: $DEVICE"
-          flutter test integration_test/linux_ocr_test.dart -d "$DEVICE"
+          echo "Using simulator: $SIMULATOR_ID"
+          xcrun simctl boot "$SIMULATOR_ID" 2>/dev/null || true
+          open -a Simulator
+          sleep 5
+          flutter test integration_test/linux_ocr_test.dart -d "$SIMULATOR_ID"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
