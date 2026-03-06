@@ -8,7 +8,7 @@ import 'fast_image_loader.dart';
 import 'fast_tensor_reader.dart';
 
 class TextDetector {
-  static const int limitSideLen = 960;
+  static const int limitSideLen = 1920;
   static const double thresh = 0.3;
   static const double boxThresh = 0.6;
   static const double unclipRatio = 1.5;
