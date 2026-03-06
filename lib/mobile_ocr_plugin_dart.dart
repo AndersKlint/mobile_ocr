@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:image/image.dart' as img;
 import 'package:path_provider/path_provider.dart';
@@ -33,20 +33,46 @@ class DartMobileOcr extends MobileOcrPlatform {
       await dir.create(recursive: true);
     }
 
+    final assetPaths = [
+      'packages/mobile_ocr/assets/mobile_ocr',
+      'assets/mobile_ocr',
+    ];
+
     for (final modelFile in _modelFiles) {
       final targetFile = File('$modelsDir/$modelFile');
-      if (!await targetFile.exists()) {
+      if (await targetFile.exists()) continue;
+
+      Object? lastError;
+      bool extracted = false;
+
+      for (final assetPath in assetPaths) {
         try {
-          final data = await rootBundle.load(
-            'packages/mobile_ocr/assets/mobile_ocr/$modelFile',
-          );
+          final fullPath = '$assetPath/$modelFile';
+          debugPrint('Mobile OCR: Trying to load asset: $fullPath');
+          final data = await rootBundle.load(fullPath);
           await targetFile.writeAsBytes(
             data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
             flush: true,
           );
-        } catch (_) {
-          // Model file not in assets, skip (may be optional like cls.onnx)
+          debugPrint(
+            'Mobile OCR: Extracted $modelFile (${data.lengthInBytes} bytes)',
+          );
+          extracted = true;
+          break;
+        } catch (e) {
+          lastError = e;
+          debugPrint(
+            'Mobile OCR: Failed to load from $assetPath/$modelFile: $e',
+          );
         }
+      }
+
+      if (!extracted && modelFile != 'cls.onnx') {
+        throw StateError(
+          'Failed to extract $modelFile. Last error: $lastError. '
+          'Tried paths: ${assetPaths.map((p) => '$p/$modelFile').join(", ")}. '
+          'Ensure assets are declared in your pubspec.yaml.',
+        );
       }
     }
   }
