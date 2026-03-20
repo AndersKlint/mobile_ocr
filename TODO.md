@@ -1,0 +1,1 @@
+Make recognition and detection thershold varialbes for package users.

@@ -9,10 +9,10 @@ import 'text_recognizer.dart';
 import 'text_classifier.dart';
 
 class OcrProcessor {
-  static const double minRecognitionScore = 0.8;
+  static const double minRecognitionScore = 0.7;
   static const double fallbackMinRecognitionScore = 0.5;
   static const double angleAspectRatioThreshold = 0.5;
-  static const double lowConfidenceThreshold = 0.65;
+  static const double lowConfidenceThreshold = 0.55;
   static const int quickCheckMaxCandidates = 3;
 
   final OrtSession detectionSession;
@@ -206,7 +206,7 @@ class OcrProcessor {
 
   Future<QuickCheckResult> hasHighConfidenceText(
     img.Image bitmap, {
-    double minimumDetectionConfidence = 0.9,
+    double minimumDetectionConfidence = 0.7,
     double recognitionThreshold = minRecognitionScore,
   }) async {
     final detectionSummary = await _detector.collectHighConfidenceDetections(
