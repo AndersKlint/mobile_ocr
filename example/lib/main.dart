@@ -51,6 +51,8 @@ class _OcrDemoPageState extends State<OcrDemoPage> {
     'assets/test_ocr/receipt_swiggy.jpg',
     'assets/test_ocr/screen_photos.jpeg',
     'assets/test_ocr/text_photos.jpeg',
+    'assets/test_ocr/shymianyu-no-mian.jpg',
+    'assets/test_ocr/shymianyu-no-mian-cropped.jpg',
   ];
 
   static bool get _isDesktop =>

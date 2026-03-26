@@ -1,0 +1,178 @@
+Database initialized successfully
+Syncing files to device Linux...                                   187ms
+
+Flutter run key commands.
+r Hot reload. 🔥🔥🔥
+R Hot restart.
+h List all available interactive commands.
+d Detach (terminate "flutter run" but leave application running).
+c Clear the screen
+q Quit (terminate the application on the device).
+
+A Dart VM Service on Linux is available at: http://127.0.0.1:43715/O5u_TAdlm1s=/
+The Flutter DevTools debugger and profiler on Linux is available at: http://127.0.0.1:43715/O5u_TAdlm1s=/devtools/?uri=ws://127.0.0.1:43715/O5u_TAdlm1s=/ws
+2026-03-25T17:29:34.911871 [ImageCaptureService] FINE: All captured images cleared
+2026-03-25T17:29:34.915280 [ImageCaptureService] FINE: All captured images cleared
+PdfDocument initial load: PdfDocumentRefKey(/home/anders/Documents/keben/高级2/高级综合-02_ocr.pdf) (1238 ms)
+PdfDocument initial load: PdfDocumentRefKey(/home/anders/Documents/keben/高级2/高级综合-02_ocr.pdf) (2226 ms)
+PdfDocument initial load: PdfDocumentRefKey(/home/anders/Documents/keben/高级2/高级综合-02_ocr.pdf) (1086 ms)
+2026-03-25T17:29:59.554868 [TextExtractionService] INFO: Starting raw OCR for image: /tmp/pdf_import/pdf_page_1774430995340605_0.png
+Filtered to 124 results
+2026-03-25T17:30:06.769357 [TextExtractionService] INFO: Raw OCR: 124 text blocks extracted
+2026-03-25T17:30:06.772463 [TextExtractionService] INFO: OCR result for image 1: 124 recognized boxes
+2026-03-25T17:30:06.772744 [TextExtractionService] FINE: Full OCR output for image 1 (/tmp/pdf_import/pdf_page_1774430995340605_0.png):
+OCR Results (with positions, sorted by Y then X):
+[0] "高级综合Ⅱ Advanced Comprehensive Course II" (confidence: 0.94, x: 143, y: 67, width: 366, height: 30)
+[1] "丢掉，扔掉。如：这样深厚的友情" (confidence: 1.00, x: 718, y: 160, width: 393, height: 29)
+[2] "gēshě" (confidence: 1.00, x: 363, y: 172, width: 80, height: 42)
+[3] "（动）" (confidence: 0.94, x: 609, y: 172, width: 64, height: 38)
+[4] "割舍" (confidence: 1.00, x: 185, y: 173, width: 68, height: 35)
+[5] "12." (confidence: 0.99, x: 123, y: 175, width: 45, height: 33)
+[6] "谁也～不下。" (confidence: 0.94, x: 717, y: 192, width: 143, height: 34)
+[7] "liúliàn" (confidence: 0.94, x: 362, y: 238, width: 75, height: 37)
+[8] "留恋" (confidence: 1.00, x: 188, y: 238, width: 66, height: 37)
+[9] "（动）" (confidence: 0.97, x: 608, y: 238, width: 64, height: 37)
+[10] "13." (confidence: 0.99, x: 123, y: 239, width: 43, height: 35)
+[11] "舍不得离开。" (confidence: 1.00, x: 717, y: 240, width: 141, height: 32)
+[12] "授予" (confidence: 0.99, x: 187, y: 285, width: 66, height: 40)
+[13] "（动）" (confidence: 0.96, x: 608, y: 287, width: 64, height: 35)
+[14] "shòuyǔ" (confidence: 0.99, x: 362, y: 288, width: 93, height: 39)
+[15] "14." (confidence: 0.99, x: 123, y: 288, width: 41, height: 37)
+[16] "给予（某种荣誉或称号）。" (confidence: 0.92, x: 717, y: 288, width: 278, height: 33)
+[17] "15." (confidence: 0.97, x: 121, y: 332, width: 46, height: 44)
+[18] "称号" (confidence: 1.00, x: 188, y: 334, width: 65, height: 40)
+[19] "（名）" (confidence: 0.94, x: 608, y: 337, width: 64, height: 37)
+[20] "赞誉的名称。" (confidence: 1.00, x: 717, y: 337, width: 142, height: 34)
+[21] "chēnghào" (confidence: 1.00, x: 365, y: 338, width: 114, height: 36)
+[22] "教会" (confidence: 1.00, x: 186, y: 382, width: 67, height: 42)
+[23] "16." (confidence: 0.98, x: 123, y: 383, width: 44, height: 40)
+[24] "（名）" (confidence: 0.93, x: 609, y: 385, width: 64, height: 38)
+[25] "传教的组织。" (confidence: 1.00, x: 716, y: 386, width: 143, height: 37)
+[26] "jiàohuì" (confidence: 0.99, x: 364, y: 387, width: 82, height: 36)
+[27] "17." (confidence: 0.99, x: 123, y: 433, width: 45, height: 37)
+[28] "策划" (confidence: 1.00, x: 187, y: 434, width: 64, height: 38)
+[29] "设计，谋划。" (confidence: 0.99, x: 716, y: 434, width: 144, height: 37)
+[30] "（动）" (confidence: 0.94, x: 608, y: 434, width: 64, height: 37)
+[31] "cèhuà" (confidence: 1.00, x: 364, y: 435, width: 77, height: 36)
+[32] "比喻重新开始做或者另搞套。" (confidence: 0.96, x: 720, y: 489, width: 392, height: 32)
+[33] "（成）" (confidence: 0.96, x: 609, y: 521, width: 62, height: 37)
+[34] "18." (confidence: 0.97, x: 124, y: 523, width: 72, height: 32)
+[35] "另起炉灶" (confidence: 1.00, x: 184, y: 523, width: 125, height: 32)
+[36] "lìng qǐ lú zào" (confidence: 0.97, x: 366, y: 524, width: 145, height: 34)
+[37] "如：怎么改也不理想，脆~，重" (confidence: 0.97, x: 719, y: 525, width: 393, height: 30)
+[38] "写一篇。" (confidence: 0.99, x: 714, y: 555, width: 99, height: 38)
+[39] "筹款" (confidence: 1.00, x: 185, y: 608, width: 68, height: 37)
+[40] "（动）" (confidence: 0.95, x: 609, y: 608, width: 62, height: 37)
+[41] "19." (confidence: 0.99, x: 122, y: 609, width: 47, height: 33)
+[42] "想办法弄钱。" (confidence: 0.99, x: 716, y: 610, width: 143, height: 32)
+[43] "chóu kuǎn" (confidence: 0.99, x: 368, y: 612, width: 115, height: 30)
+[44] "（成）" (confidence: 0.96, x: 608, y: 657, width: 63, height: 37)
+[45] "招兵买马" (confidence: 1.00, x: 187, y: 658, width: 121, height: 34)
+[46] "20." (confidence: 0.99, x: 123, y: 660, width: 42, height: 31)
+[47] "zhāo bīng mǎi mǎ" (confidence: 0.98, x: 367, y: 661, width: 196, height: 33)
+[48] "喻从各组织或扩充员。" (confidence: 0.99, x: 721, y: 661, width: 387, height: 29)
+[49] "合在起。如：全球经济互相~" (confidence: 0.98, x: 717, y: 706, width: 386, height: 34)
+[50] "（动）" (confidence: 0.96, x: 608, y: 721, width: 66, height: 37)
+[51] "融合" (confidence: 1.00, x: 185, y: 722, width: 68, height: 37)
+[52] "rónghé" (confidence: 0.99, x: 364, y: 722, width: 88, height: 39)
+[53] "21." (confidence: 0.99, x: 123, y: 724, width: 44, height: 32)
+[54] "成为体。" (confidence: 1.00, x: 716, y: 739, width: 121, height: 37)
+[55] "危急存亡" (confidence: 1.00, x: 190, y: 786, width: 120, height: 36)
+[56] "22." (confidence: 0.99, x: 122, y: 787, width: 44, height: 34)
+[57] "wēijí cúnwáng" (confidence: 0.96, x: 364, y: 787, width: 165, height: 40)
+[58] "危险紧急，到了死边缘。" (confidence: 1.00, x: 718, y: 788, width: 289, height: 33)
+[59] "决定性的时机或转折点。如：" (confidence: 1.00, x: 716, y: 836, width: 396, height: 32)
+[60] "（名）" (confidence: 0.92, x: 605, y: 848, width: 69, height: 41)
+[61] "guāntóu" (confidence: 1.00, x: 363, y: 851, width: 102, height: 42)
+[62] "23." (confidence: 0.96, x: 122, y: 851, width: 50, height: 35)
+[63] "关头" (confidence: 1.00, x: 184, y: 851, width: 68, height: 35)
+[64] "死~/紧要~" (confidence: 0.93, x: 716, y: 870, width: 149, height: 32)
+[65] "书语。称呼对所给的爱。如：" (confidence: 0.97, x: 719, y: 916, width: 385, height: 31)
+[66] "24.厚爱" (confidence: 0.99, x: 121, y: 929, width: 134, height: 39)
+[67] "（名）" (confidence: 0.96, x: 609, y: 930, width: 64, height: 38)
+[68] "hòu'ài" (confidence: 0.96, x: 366, y: 933, width: 76, height: 32)
+[69] "多谢您的～。" (confidence: 0.92, x: 716, y: 948, width: 145, height: 38)
+[70] "qǐmù" (confidence: 1.00, x: 364, y: 996, width: 68, height: 40)
+[71] "企慕" (confidence: 1.00, x: 183, y: 996, width: 70, height: 36)
+[72] "书语。中向往、敬仰。" (confidence: 1.00, x: 719, y: 997, width: 290, height: 35)
+[73] "（动）" (confidence: 0.94, x: 610, y: 997, width: 61, height: 35)
+[74] "25." (confidence: 1.00, x: 123, y: 998, width: 43, height: 32)
+[75] "博爱" (confidence: 1.00, x: 185, y: 1044, width: 69, height: 39)
+[76] "普遍的爱。" (confidence: 1.00, x: 716, y: 1045, width: 118, height: 37)
+[77] "（名）" (confidence: 0.98, x: 608, y: 1046, width: 64, height: 35)
+[78] "bó'ài" (confidence: 0.96, x: 364, y: 1046, width: 66, height: 33)
+[79] "26." (confidence: 1.00, x: 122, y: 1047, width: 44, height: 32)
+[80] "（动）" (confidence: 0.94, x: 609, y: 1094, width: 62, height: 37)
+[81] "这里指被打倒。" (confidence: 1.00, x: 716, y: 1096, width: 167, height: 33)
+[82] "qūzhé" (confidence: 0.99, x: 364, y: 1096, width: 76, height: 37)
+[83] "屈折" (confidence: 0.99, x: 186, y: 1097, width: 66, height: 33)
+[84] "27." (confidence: 1.00, x: 123, y: 1097, width: 45, height: 31)
+[85] "严密地关起来或者盖起来，不能被" (confidence: 1.00, x: 718, y: 1144, width: 394, height: 31)
+[86] "封闭" (confidence: 1.00, x: 185, y: 1157, width: 67, height: 40)
+[87] "（动）" (confidence: 0.95, x: 606, y: 1157, width: 66, height: 39)
+[88] "28." (confidence: 0.97, x: 122, y: 1158, width: 47, height: 36)
+[89] "fēngbì" (confidence: 0.95, x: 364, y: 1158, width: 83, height: 41)
+[90] "打开或通过。" (confidence: 1.00, x: 716, y: 1178, width: 140, height: 34)
+[91] "拘押" (confidence: 1.00, x: 185, y: 1222, width: 70, height: 40)
+[92] "（动）" (confidence: 0.97, x: 607, y: 1225, width: 66, height: 37)
+[93] "jūyā" (confidence: 0.95, x: 362, y: 1225, width: 61, height: 40)
+[94] "关起来，被限制了由。" (confidence: 1.00, x: 718, y: 1225, width: 265, height: 33)
+[95] "29." (confidence: 0.99, x: 123, y: 1225, width: 43, height: 32)
+[96] "管里流动的。比喻血统。" (confidence: 0.91, x: 718, y: 1275, width: 393, height: 29)
+[97] "（名）" (confidence: 0.95, x: 608, y: 1287, width: 64, height: 40)
+[98] "血脉" (confidence: 1.00, x: 186, y: 1290, width: 66, height: 33)
+[99] "30." (confidence: 1.00, x: 123, y: 1291, width: 45, height: 31)
+[100] "xuèmài" (confidence: 1.00, x: 364, y: 1292, width: 87, height: 31)
+[101] "如：～相连。" (confidence: 0.92, x: 716, y: 1306, width: 142, height: 36)
+[102] "yīxī" (confidence: 0.98, x: 360, y: 1353, width: 59, height: 43)
+[103] "依稀" (confidence: 1.00, x: 184, y: 1353, width: 68, height: 35)
+[104] "31." (confidence: 0.99, x: 121, y: 1354, width: 50, height: 35)
+[105] "（副）" (confidence: 0.99, x: 609, y: 1355, width: 61, height: 35)
+[106] "模模糊糊地。" (confidence: 1.00, x: 716, y: 1355, width: 143, height: 32)
+[107] "（感情、量等）集中在个标" (confidence: 0.99, x: 715, y: 1403, width: 398, height: 31)
+[108] "（动）" (confidence: 0.94, x: 606, y: 1417, width: 66, height: 39)
+[109] "倾注" (confidence: 1.00, x: 187, y: 1418, width: 66, height: 35)
+[110] "qīngzhù" (confidence: 1.00, x: 363, y: 1419, width: 99, height: 39)
+[111] "32." (confidence: 0.99, x: 122, y: 1421, width: 44, height: 31)
+[112] "上。如：他们在孩上~了全。" (confidence: 0.97, x: 719, y: 1437, width: 389, height: 34)
+[113] "任命" (confidence: 1.00, x: 185, y: 1481, width: 69, height: 39)
+[114] "（动）" (confidence: 0.96, x: 608, y: 1483, width: 64, height: 37)
+[115] "33." (confidence: 0.91, x: 122, y: 1483, width: 43, height: 37)
+[116] "rènming" (confidence: 0.93, x: 364, y: 1483, width: 101, height: 39)
+[117] "关于职位的命令。" (confidence: 0.99, x: 718, y: 1484, width: 238, height: 33)
+[118] "（动）" (confidence: 0.94, x: 610, y: 1532, width: 62, height: 37)
+[119] "推动使成功。" (confidence: 1.00, x: 716, y: 1532, width: 143, height: 36)
+[120] "促成" (confidence: 1.00, x: 183, y: 1533, width: 70, height: 36)
+[121] "34." (confidence: 1.00, x: 122, y: 1533, width: 48, height: 33)
+[122] "cùchéng" (confidence: 0.99, x: 364, y: 1533, width: 101, height: 39)
+[123] "54" (confidence: 1.00, x: 70, y: 1663, width: 32, height: 30)
+
+2026-03-25T17:30:06.780897 [AiOrchestrator] INFO: Generating 27 OCR entries from 124 blocks in 2 batches (sizes: [14, 13])
+2026-03-25T17:30:06.782881 [AiOrchestrator] INFO: AI batch 1 attempt 1/2 for OCR data
+2026-03-25T17:30:06.784900 [DeepSeekService] INFO: Sent request 1 to deepseek for ~14 words in image 1
+2026-03-25T17:30:06.786238 [DeepSeekService] FINE: DeepSeek request JSON:
+{
+  "model": "deepseek-chat",
+  "messages": [
+    {
+      "role": "user",
+      "content": "You are given OCR-extracted text blocks from a Chinese vocabulary list image. Each block has position data (x, y, width, height).\n\nYour task is to extract vocabulary entries from TOP to BOTTOM as they appear in the image.\n\nReturn structured JSON with the following fields for each word:\n\n1. chinese: the original Chinese word from the OCR result\n2. pinyin: the pinyin from the OCR result\n3. meaning: the meaning or translation from the OCR result. If the translation spans multiple lines in the OCR, combine those lines into a single meaning field. Preserve OCR-provided meaning text rather than translating it into English.\n4. description: a short description in English of the word's use cases and context\n5. example: 3 example sentences in Chinese (if a context sentence is provided, don't just copy it as an example sentence)\n6. exampletranslation: English translation of the 3 example sentences\n\n\nInstructions:\n- Read the OCR blocks in order: first by Y position (top to bottom), then by X position (left to right) within the same row.\n- Group text blocks that have similar X positions (within about 50 pixels) as belonging to the same vocabulary entry.\n- When translation or meaning spans multiple lines with similar X positions and sequential Y positions, combine them into one meaning field.\n- Return the JSON array in the same order as the vocabulary appears in the image.\n- Do not skip entries only because OCR confidence is low.\n- Skip lines only when they do not contain clear vocabulary data.\n- Keep the response strictly as a JSON array with no extra commentary.\n\nOCR extracted text blocks with positions:\n```\nOCR Results (with positions, sorted by Y then X):\n[0] \"高级综合Ⅱ Advanced Comprehensive Course II\" (confidence: 0.94, x: 143, y: 67, width: 366, height: 30)\n[1] \"丢掉，扔掉。如：这样深厚的友情\" (confidence: 1.00, x: 718, y: 160, width: 393, height: 29)\n[2] \"gēshě\" (confidence: 1.00, x: 363, y: 172, width: 80, height: 42)\n[3] \"（动）\" (confidence: 0.94, x: 609, y: 172, width: 64, height: 38)\n[4] \"割舍\" (confidence: 1.00, x: 185, y: 173, width: 68, height: 35)\n[5] \"12.\" (confidence: 0.99, x: 123, y: 175, width: 45, height: 33)\n[6] \"谁也～不下。\" (confidence: 0.94, x: 717, y: 192, width: 143, height: 34)\n[7] \"liúliàn\" (confidence: 0.94, x: 362, y: 238, width: 75, height: 37)\n[8] \"留恋\" (confidence: 1.00, x: 188, y: 238, width: 66, height: 37)\n[9] \"（动）\" (confidence: 0.97, x: 608, y: 238, width: 64, height: 37)\n[10] \"13.\" (confidence: 0.99, x: 123, y: 239, width: 43, height: 35)\n[11] \"舍不得离开。\" (confidence: 1.00, x: 717, y: 240, width: 141, height: 32)\n[12] \"授予\" (confidence: 0.99, x: 187, y: 285, width: 66, height: 40)\n[13] \"（动）\" (confidence: 0.96, x: 608, y: 287, width: 64, height: 35)\n[14] \"shòuyǔ\" (confidence: 0.99, x: 362, y: 288, width: 93, height: 39)\n[15] \"14.\" (confidence: 0.99, x: 123, y: 288, width: 41, height: 37)\n[16] \"给予（某种荣誉或称号）。\" (confidence: 0.92, x: 717, y: 288, width: 278, height: 33)\n[17] \"15.\" (confidence: 0.97, x: 121, y: 332, width: 46, height: 44)\n[18] \"称号\" (confidence: 1.00, x: 188, y: 334, width: 65, height: 40)\n[19] \"（名）\" (confidence: 0.94, x: 608, y: 337, width: 64, height: 37)\n[20] \"赞誉的名称。\" (confidence: 1.00, x: 717, y: 337, width: 142, height: 34)\n[21] \"chēnghào\" (confidence: 1.00, x: 365, y: 338, width: 114, height: 36)\n[22] \"教会\" (confidence: 1.00, x: 186, y: 382, width: 67, height: 42)\n[23] \"16.\" (confidence: 0.98, x: 123, y: 383, width: 44, height: 40)\n[24] \"（名）\" (confidence: 0.93, x: 609, y: 385, width: 64, height: 38)\n[25] \"传教的组织。\" (confidence: 1.00, x: 716, y: 386, width: 143, height: 37)\n[26] \"jiàohuì\" (confidence: 0.99, x: 364, y: 387, width: 82, height: 36)\n[27] \"17.\" (confidence: 0.99, x: 123, y: 433, width: 45, height: 37)\n[28] \"策划\" (confidence: 1.00, x: 187, y: 434, width: 64, height: 38)\n[29] \"设计，谋划。\" (confidence: 0.99, x: 716, y: 434, width: 144, height: 37)\n[30] \"（动）\" (confidence: 0.94, x: 608, y: 434, width: 64, height: 37)\n[31] \"cèhuà\" (confidence: 1.00, x: 364, y: 435, width: 77, height: 36)\n[32] \"比喻重新开始做或者另搞套。\" (confidence: 0.96, x: 720, y: 489, width: 392, height: 32)\n[33] \"（成）\" (confidence: 0.96, x: 609, y: 521, width: 62, height: 37)\n[34] \"18.\" (confidence: 0.97, x: 124, y: 523, width: 72, height: 32)\n[35] \"另起炉灶\" (confidence: 1.00, x: 184, y: 523, width: 125, height: 32)\n[36] \"lìng qǐ lú zào\" (confidence: 0.97, x: 366, y: 524, width: 145, height: 34)\n[37] \"如：怎么改也不理想，脆~，重\" (confidence: 0.97, x: 719, y: 525, width: 393, height: 30)\n[38] \"写一篇。\" (confidence: 0.99, x: 714, y: 555, width: 99, height: 38)\n[39] \"筹款\" (confidence: 1.00, x: 185, y: 608, width: 68, height: 37)\n[40] \"（动）\" (confidence: 0.95, x: 609, y: 608, width: 62, height: 37)\n[41] \"19.\" (confidence: 0.99, x: 122, y: 609, width: 47, height: 33)\n[42] \"想办法弄钱。\" (confidence: 0.99, x: 716, y: 610, width: 143, height: 32)\n[43] \"chóu kuǎn\" (confidence: 0.99, x: 368, y: 612, width: 115, height: 30)\n[44] \"（成）\" (confidence: 0.96, x: 608, y: 657, width: 63, height: 37)\n[45] \"招兵买马\" (confidence: 1.00, x: 187, y: 658, width: 121, height: 34)\n[46] \"20.\" (confidence: 0.99, x: 123, y: 660, width: 42, height: 31)\n[47] \"zhāo bīng mǎi mǎ\" (confidence: 0.98, x: 367, y: 661, width: 196, height: 33)\n[48] \"喻从各组织或扩充员。\" (confidence: 0.99, x: 721, y: 661, width: 387, height: 29)\n[49] \"合在起。如：全球经济互相~\" (confidence: 0.98, x: 717, y: 706, width: 386, height: 34)\n[50] \"（动）\" (confidence: 0.96, x: 608, y: 721, width: 66, height: 37)\n[51] \"融合\" (confidence: 1.00, x: 185, y: 722, width: 68, height: 37)\n[52] \"rónghé\" (confidence: 0.99, x: 364, y: 722, width: 88, height: 39)\n[53] \"21.\" (confidence: 0.99, x: 123, y: 724, width: 44, height: 32)\n[54] \"成为体。\" (confidence: 1.00, x: 716, y: 739, width: 121, height: 37)\n[55] \"危急存亡\" (confidence: 1.00, x: 190, y: 786, width: 120, height: 36)\n[56] \"22.\" (confidence: 0.99, x: 122, y: 787, width: 44, height: 34)\n[57] \"wēijí cúnwáng\" (confidence: 0.96, x: 364, y: 787, width: 165, height: 40)\n[58] \"危险紧急，到了死边缘。\" (confidence: 1.00, x: 718, y: 788, width: 289, height: 33)\n\n```\n\nReturn structured JSON like this:\n```json\n[\n  {\n    \"chinese\": \"中文\",\n    \"pinyin\": \"zhōngwén\",\n    \"meaning\": \"Chinese language\",\n    \"description\": \"A short description in English.\",\n    \"example\": \"我是中文学生。\\n他说中文很好。\\n我们一起学习中文。\",\n    \"exampletranslation\": \"Example translation 1.\\nExample translation 2.\\nExample translation 3.\"\n  }\n]\n```\n\n"
+    }
+  ],
+  "temperature": 0.1,
+  "max_tokens": 8000
+}
+2026-03-25T17:30:06.795212 [AiOrchestrator] INFO: AI batch 2 attempt 1/2 for OCR data
+2026-03-25T17:30:06.795448 [DeepSeekService] INFO: Sent request 2 to deepseek for ~13 words in image 1
+2026-03-25T17:30:06.795770 [DeepSeekService] FINE: DeepSeek request JSON:
+{
+  "model": "deepseek-chat",
+  "messages": [
+    {
+      "role": "user",
+      "content": "You are given OCR-extracted text blocks from a Chinese vocabulary list image. Each block has position data (x, y, width, height).\n\nYour task is to extract vocabulary entries from TOP to BOTTOM as they appear in the image.\n\nReturn structured JSON with the following fields for each word:\n\n1. chinese: the original Chinese word from the OCR result\n2. pinyin: the pinyin from the OCR result\n3. meaning: the meaning or translation from the OCR result. If the translation spans multiple lines in the OCR, combine those lines into a single meaning field. Preserve OCR-provided meaning text rather than translating it into English.\n4. description: a short description in English of the word's use cases and context\n5. example: 3 example sentences in Chinese (if a context sentence is provided, don't just copy it as an example sentence)\n6. exampletranslation: English translation of the 3 example sentences\n\n\nInstructions:\n- Read the OCR blocks in order: first by Y position (top to bottom), then by X position (left to right) within the same row.\n- Group text blocks that have similar X positions (within about 50 pixels) as belonging to the same vocabulary entry.\n- When translation or meaning spans multiple lines with similar X positions and sequential Y positions, combine them into one meaning field.\n- Return the JSON array in the same order as the vocabulary appears in the image.\n- Do not skip entries only because OCR confidence is low.\n- Skip lines only when they do not contain clear vocabulary data.\n- Keep the response strictly as a JSON array with no extra commentary.\n\nOCR extracted text blocks with positions:\n```\nOCR Results (with positions, sorted by Y then X):\n[0] \"决定性的时机或转折点。如：\" (confidence: 1.00, x: 716, y: 836, width: 396, height: 32)\n[1] \"（名）\" (confidence: 0.92, x: 605, y: 848, width: 69, height: 41)\n[2] \"guāntóu\" (confidence: 1.00, x: 363, y: 851, width: 102, height: 42)\n[3] \"23.\" (confidence: 0.96, x: 122, y: 851, width: 50, height: 35)\n[4] \"关头\" (confidence: 1.00, x: 184, y: 851, width: 68, height: 35)\n[5] \"死~/紧要~\" (confidence: 0.93, x: 716, y: 870, width: 149, height: 32)\n[6] \"。称呼对所给的爱。如：\" (confidence: 0.97, x: 719, y: 916, width: 385, height: 31)\n[7] \"24.厚爱\" (confidence: 0.99, x: 121, y: 929, width: 134, height: 39)\n[8] \"（名）\" (confidence: 0.96, x: 609, y: 930, width: 64, height: 38)\n[9] \"hòu'ài\" (confidence: 0.96, x: 366, y: 933, width: 76, height: 32)\n[10] \"多谢您的～。\" (confidence: 0.92, x: 716, y: 948, width: 145, height: 38)\n[11] \"qǐmù\" (confidence: 1.00, x: 364, y: 996, width: 68, height: 40)\n[12] \"企慕\" (confidence: 1.00, x: 183, y: 996, width: 70, height: 36)\n[13] \"书语。中向往、敬仰。\" (confidence: 1.00, x: 719, y: 997, width: 290, height: 35)\n[14] \"（动）\" (confidence: 0.94, x: 610, y: 997, width: 61, height: 35)\n[15] \"25.\" (confidence: 1.00, x: 123, y: 998, width: 43, height: 32)\n[16] \"博爱\" (confidence: 1.00, x: 185, y: 1044, width: 69, height: 39)\n[17] \"普遍的爱。\" (confidence: 1.00, x: 716, y: 1045, width: 118, height: 37)\n[18] \"（名）\" (confidence: 0.98, x: 608, y: 1046, width: 64, height: 35)\n[19] \"bó'ài\" (confidence: 0.96, x: 364, y: 1046, width: 66, height: 33)\n[20] \"26.\" (confidence: 1.00, x: 122, y: 1047, width: 44, height: 32)\n[21] \"（动）\" (confidence: 0.94, x: 609, y: 1094, width: 62, height: 37)\n[22] \"这里指被打倒。\" (confidence: 1.00, x: 716, y: 1096, width: 167, height: 33)\n[23] \"qūzhé\" (confidence: 0.99, x: 364, y: 1096, width: 76, height: 37)\n[24] \"屈折\" (confidence: 0.99, x: 186, y: 1097, width: 66, height: 33)\n[25] \"27.\" (confidence: 1.00, x: 123, y: 1097, width: 45, height: 31)\n[26] \"严密地关起来或者盖起来，不能被\" (confidence: 1.00, x: 718, y: 1144, width: 394, height: 31)\n[27] \"封闭\" (confidence: 1.00, x: 185, y: 1157, width: 67, height: 40)\n[28] \"（动）\" (confidence: 0.95, x: 606, y: 1157, width: 66, height: 39)\n[29] \"28.\" (confidence: 0.97, x: 122, y: 1158, width: 47, height: 36)\n[30] \"fēngbì\" (confidence: 0.95, x: 364, y: 1158, width: 83, height: 41)\n[31] \"打开或通过。\" (confidence: 1.00, x: 716, y: 1178, width: 140, height: 34)\n[32] \"拘押\" (confidence: 1.00, x: 185, y: 1222, width: 70, height: 40)\n[33] \"（动）\" (confidence: 0.97, x: 607, y: 1225, width: 66, height: 37)\n[34] \"jūyā\" (confidence: 0.95, x: 362, y: 1225, width: 61, height: 40)\n[35] \"关起来，被限制了由。\" (confidence: 1.00, x: 718, y: 1225, width: 265, height: 33)\n[36] \"29.\" (confidence: 0.99, x: 123, y: 1225, width: 43, height: 32)\n[37] \"管里流动的。比喻血统。\" (confidence: 0.91, x: 718, y: 1275, width: 393, height: 29)\n[38] \"（名）\" (confidence: 0.95, x: 608, y: 1287, width: 64, height: 40)\n[39] \"血脉\" (confidence: 1.00, x: 186, y: 1290, width: 66, height: 33)\n[40] \"30.\" (confidence: 1.00, x: 123, y: 1291, width: 45, height: 31)\n[41] \"xuèmài\" (confidence: 1.00, x: 364, y: 1292, width: 87, height: 31)\n[42] \"如：～相连。\" (confidence: 0.92, x: 716, y: 1306, width: 142, height: 36)\n[43] \"yīxī\" (confidence: 0.98, x: 360, y: 1353, width: 59, height: 43)\n[44] \"依稀\" (confidence: 1.00, x: 184, y: 1353, width: 68, height: 35)\n[45] \"31.\" (confidence: 0.99, x: 121, y: 1354, width: 50, height: 35)\n[46] \"（副）\" (confidence: 0.99, x: 609, y: 1355, width: 61, height: 35)\n[47] \"模模糊糊地。\" (confidence: 1.00, x: 716, y: 1355, width: 143, height: 32)\n[48] \"（感情、量等）集中在个标\" (confidence: 0.99, x: 715, y: 1403, width: 398, height: 31)\n[49] \"（动）\" (confidence: 0.94, x: 606, y: 1417, width: 66, height: 39)\n[50] \"倾注\" (confidence: 1.00, x: 187, y: 1418, width: 66, height: 35)\n[51] \"qīngzhù\" (confidence: 1.00, x: 363, y: 1419, width: 99, height: 39)\n[52] \"32.\" (confidence: 0.99, x: 122, y: 1421, width: 44, height: 31)\n[53] \"上。如：他们在孩上~了全。\" (confidence: 0.97, x: 719, y: 1437, width: 389, height: 34)\n[54] \"任命\" (confidence: 1.00, x: 185, y: 1481, width: 69, height: 39)\n[55] \"（动）\" (confidence: 0.96, x: 608, y: 1483, width: 64, height: 37)\n[56] \"33.\" (confidence: 0.91, x: 122, y: 1483, width: 43, height: 37)\n[57] \"rènming\" (confidence: 0.93, x: 364, y: 1483, width: 101, height: 39)\n[58] \"关于职位的命令。\" (confidence: 0.99, x: 718, y: 1484, width: 238, height: 33)\n[59] \"（动）\" (confidence: 0.94, x: 610, y: 1532, width: 62, height: 37)\n[60] \"推动使成功。\" (confidence: 1.00, x: 716, y: 1532, width: 143, height: 36)\n[61] \"促成\" (confidence: 1.00, x: 183, y: 1533, width: 70, height: 36)\n[62] \"34.\" (confidence: 1.00, x: 122, y: 1533, width: 48, height: 33)\n[63] \"cùchéng\" (confidence: 0.99, x: 364, y: 1533, width: 101, height: 39)\n[64] \"54\" (confidence: 1.00, x: 70, y: 1663, width: 32, height: 30)\n\n```\n\nReturn structured JSON like this:\n```json\n[\n  {\n    \"chinese\": \"中文\",\n    \"pinyin\": \"zhōngwén\",\n    \"meaning\": \"Chinese language\",\n    \"description\": \"A short description in English.\",\n    \"example\": \"我是中文学生。\\n他说中文很好。\\n我们一起学习中文。\",\n    \"exampletranslation\": \"Example translation 1.\\nExample translation 2.\\nExample translation 3.\"\n  }\n]\n```\n\n"书语
+    }
+  ],
+  "temperature": 0.1,
+  "max_tokens": 8000
+}
