@@ -15,7 +15,7 @@ class OcrProcessor {
   static const double lowConfidenceThreshold = 0.55;
   static const int quickCheckMaxCandidates = 3;
   static const double longLineAspectRatioThreshold = 8.0;
-  static const double longLineHorizontalPaddingRatio = 0.02;
+  static const double longLineHorizontalPaddingRatio = 0.05;
   static const double longLineVerticalPaddingRatio = 0.5;
 
   final OrtSession detectionSession;

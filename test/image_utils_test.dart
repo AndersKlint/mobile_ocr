@@ -65,14 +65,14 @@ void main() {
 
       final expanded = ImageUtils.expandBox(
         box,
-        horizontalPaddingRatio: 0.02,
+        horizontalPaddingRatio: 0.05,
         verticalPaddingRatio: 0.5,
         imageWidth: 2000,
         imageHeight: 1000,
       );
 
-      expect(expanded[0].x, closeTo(80, 0.01));
-      expect(expanded[1].x, closeTo(1120, 0.01));
+      expect(expanded[0].x, closeTo(50, 0.01));
+      expect(expanded[1].x, closeTo(1150, 0.01));
       expect(expanded[0].y, closeTo(150, 0.01));
       expect(expanded[2].y, closeTo(350, 0.01));
     });
