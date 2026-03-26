@@ -9,32 +9,45 @@ class ImageUtils {
       return points;
     }
 
-    final centerX = points.map((p) => p.x).reduce((a, b) => a + b) / 4;
-    final centerY = points.map((p) => p.y).reduce((a, b) => a + b) / 4;
+    final rect = List<Point?>.filled(4, null);
+    final sums = points.map((point) => point.x + point.y).toList();
 
-    final sortedPoints = List<Point>.from(points)
-      ..sort((a, b) {
-        final angleA = math.atan2(a.y - centerY, a.x - centerX);
-        final angleB = math.atan2(b.y - centerY, b.x - centerX);
-        return angleA.compareTo(angleB);
-      });
-
-    int topLeftIndex = 0;
-    double minSum = sortedPoints[0].x + sortedPoints[0].y;
-    for (int i = 1; i < 4; i++) {
-      final sum = sortedPoints[i].x + sortedPoints[i].y;
-      if (sum < minSum) {
-        minSum = sum;
-        topLeftIndex = i;
+    var minSumIndex = 0;
+    var maxSumIndex = 0;
+    for (int i = 1; i < points.length; i++) {
+      if (sums[i] < sums[minSumIndex]) {
+        minSumIndex = i;
+      }
+      if (sums[i] > sums[maxSumIndex]) {
+        maxSumIndex = i;
       }
     }
 
-    final orderedPoints = <Point>[];
-    for (int i = 0; i < 4; i++) {
-      orderedPoints.add(sortedPoints[(topLeftIndex + i) % 4]);
+    rect[0] = points[minSumIndex];
+    rect[2] = points[maxSumIndex];
+
+    final remaining = <Point>[];
+    for (int i = 0; i < points.length; i++) {
+      if (i != minSumIndex && i != maxSumIndex) {
+        remaining.add(points[i]);
+      }
     }
 
-    return orderedPoints;
+    if (remaining.length != 2) {
+      return points;
+    }
+
+    final diff0 = remaining[0].y - remaining[0].x;
+    final diff1 = remaining[1].y - remaining[1].x;
+    if (diff0 <= diff1) {
+      rect[1] = remaining[0];
+      rect[3] = remaining[1];
+    } else {
+      rect[1] = remaining[1];
+      rect[3] = remaining[0];
+    }
+
+    return rect.whereType<Point>().toList(growable: false);
   }
 
   static img.Image cropTextRegion(img.Image bitmap, List<Point> points) {
@@ -42,41 +55,149 @@ class ImageUtils {
       throw ArgumentError('Expected 4 points for text region');
     }
 
-    // Use axis-aligned bounding box instead of perspective transform
-    // This is more robust and works well for most text
-    double minX = points[0].x;
-    double maxX = points[0].x;
-    double minY = points[0].y;
-    double maxY = points[0].y;
-    for (final p in points) {
-      if (p.x < minX) minX = p.x;
-      if (p.x > maxX) maxX = p.x;
-      if (p.y < minY) minY = p.y;
-      if (p.y > maxY) maxY = p.y;
-    }
+    final ordered = orderPointsClockwise(
+      clipBoxToImageBounds(points, bitmap.width, bitmap.height),
+    );
+    final cropWidth = math
+        .max(distance(ordered[0], ordered[1]), distance(ordered[2], ordered[3]))
+        .toInt()
+        .clamp(1, 10000);
+    final cropHeight = math
+        .max(distance(ordered[0], ordered[3]), distance(ordered[1], ordered[2]))
+        .toInt()
+        .clamp(1, 10000);
 
-    final width = (maxX - minX).toInt().clamp(1, 10000);
-    final height = (maxY - minY).toInt().clamp(1, 10000);
+    final srcPoints = <double>[
+      ordered[0].x,
+      ordered[0].y,
+      ordered[1].x,
+      ordered[1].y,
+      ordered[2].x,
+      ordered[2].y,
+      ordered[3].x,
+      ordered[3].y,
+    ];
+    final dstPoints = <double>[
+      0,
+      0,
+      cropWidth.toDouble(),
+      0,
+      cropWidth.toDouble(),
+      cropHeight.toDouble(),
+      0,
+      cropHeight.toDouble(),
+    ];
 
-    final cropped = img.copyCrop(
+    final cropped = perspectiveTransform(
       bitmap,
-      x: minX.toInt().clamp(0, bitmap.width - 1),
-      y: minY.toInt().clamp(0, bitmap.height - 1),
-      width: width.clamp(
-        1,
-        bitmap.width - minX.toInt().clamp(0, bitmap.width - 1),
-      ),
-      height: height.clamp(
-        1,
-        bitmap.height - minY.toInt().clamp(0, bitmap.height - 1),
-      ),
+      srcPoints,
+      dstPoints,
+      cropWidth,
+      cropHeight,
     );
 
-    if (height / width >= 1.5) {
+    if (cropHeight / cropWidth >= 1.5) {
       return img.copyRotate(cropped, angle: 90);
     }
 
     return cropped;
+  }
+
+  static double quadWidth(List<Point> points) {
+    final ordered = orderPointsClockwise(points);
+    if (ordered.length != 4) {
+      return 0;
+    }
+
+    return math.max(
+      distance(ordered[0], ordered[1]),
+      distance(ordered[2], ordered[3]),
+    );
+  }
+
+  static double quadHeight(List<Point> points) {
+    final ordered = orderPointsClockwise(points);
+    if (ordered.length != 4) {
+      return 0;
+    }
+
+    return math.max(
+      distance(ordered[0], ordered[3]),
+      distance(ordered[1], ordered[2]),
+    );
+  }
+
+  static List<Point> expandBox(
+    List<Point> points, {
+    required double horizontalPaddingRatio,
+    required double verticalPaddingRatio,
+    required int imageWidth,
+    required int imageHeight,
+  }) {
+    final ordered = orderPointsClockwise(points);
+    if (ordered.length != 4) {
+      return clipBoxToImageBounds(points, imageWidth, imageHeight);
+    }
+
+    final width = quadWidth(ordered);
+    final height = quadHeight(ordered);
+    if (width <= 0 || height <= 0) {
+      return clipBoxToImageBounds(ordered, imageWidth, imageHeight);
+    }
+
+    final horizontal = Point(
+      ((ordered[1].x - ordered[0].x) + (ordered[2].x - ordered[3].x)) / 2,
+      ((ordered[1].y - ordered[0].y) + (ordered[2].y - ordered[3].y)) / 2,
+    );
+    final vertical = Point(
+      ((ordered[3].x - ordered[0].x) + (ordered[2].x - ordered[1].x)) / 2,
+      ((ordered[3].y - ordered[0].y) + (ordered[2].y - ordered[1].y)) / 2,
+    );
+
+    final horizontalDirection = normalize(horizontal) ?? const Point(1.0, 0.0);
+    final verticalDirection = normalize(vertical) ?? const Point(0.0, 1.0);
+
+    final horizontalPadding = width * horizontalPaddingRatio;
+    final verticalPadding = height * verticalPaddingRatio;
+
+    final expanded = [
+      Point(
+        ordered[0].x -
+            horizontalDirection.x * horizontalPadding -
+            verticalDirection.x * verticalPadding,
+        ordered[0].y -
+            horizontalDirection.y * horizontalPadding -
+            verticalDirection.y * verticalPadding,
+      ),
+      Point(
+        ordered[1].x +
+            horizontalDirection.x * horizontalPadding -
+            verticalDirection.x * verticalPadding,
+        ordered[1].y +
+            horizontalDirection.y * horizontalPadding -
+            verticalDirection.y * verticalPadding,
+      ),
+      Point(
+        ordered[2].x +
+            horizontalDirection.x * horizontalPadding +
+            verticalDirection.x * verticalPadding,
+        ordered[2].y +
+            horizontalDirection.y * horizontalPadding +
+            verticalDirection.y * verticalPadding,
+      ),
+      Point(
+        ordered[3].x -
+            horizontalDirection.x * horizontalPadding +
+            verticalDirection.x * verticalPadding,
+        ordered[3].y -
+            horizontalDirection.y * horizontalPadding +
+            verticalDirection.y * verticalPadding,
+      ),
+    ];
+
+    return orderPointsClockwise(
+      clipBoxToImageBounds(expanded, imageWidth, imageHeight),
+    );
   }
 
   static img.Image perspectiveTransform(
@@ -86,7 +207,7 @@ class ImageUtils {
     int dstWidth,
     int dstHeight,
   ) {
-    final matrix = computePerspectiveTransform(srcPoints, dstPoints);
+    final matrix = computePerspectiveTransform(dstPoints, srcPoints);
     final result = img.Image(width: dstWidth, height: dstHeight);
 
     for (int y = 0; y < dstHeight; y++) {
@@ -96,48 +217,48 @@ class ImageUtils {
           x.toDouble(),
           y.toDouble(),
         );
-        final srcX = srcCoord[0];
-        final srcY = srcCoord[1];
+        final srcX = srcCoord[0].clamp(0.0, src.width - 1.0);
+        final srcY = srcCoord[1].clamp(0.0, src.height - 1.0);
 
-        // Bilinear interpolation
         final x0 = srcX.floor();
         final y0 = srcY.floor();
-        final x1 = x0 + 1;
-        final y1 = y0 + 1;
+        final x1 = math.min(x0 + 1, src.width - 1);
+        final y1 = math.min(y0 + 1, src.height - 1);
 
         final fx = srcX - x0;
         final fy = srcY - y0;
 
-        if (x0 >= 0 && x1 < src.width && y0 >= 0 && y1 < src.height) {
-          final p00 = src.getPixel(x0, y0);
-          final p01 = src.getPixel(x0, y1);
-          final p10 = src.getPixel(x1, y0);
-          final p11 = src.getPixel(x1, y1);
+        final p00 = src.getPixel(x0, y0);
+        final p01 = src.getPixel(x0, y1);
+        final p10 = src.getPixel(x1, y0);
+        final p11 = src.getPixel(x1, y1);
 
-          final r =
-              (p00.r * (1 - fx) * (1 - fy) +
-                      p10.r * fx * (1 - fy) +
-                      p01.r * (1 - fx) * fy +
-                      p11.r * fx * fy)
-                  .round();
-          final g =
-              (p00.g * (1 - fx) * (1 - fy) +
-                      p10.g * fx * (1 - fy) +
-                      p01.g * (1 - fx) * fy +
-                      p11.g * fx * fy)
-                  .round();
-          final b =
-              (p00.b * (1 - fx) * (1 - fy) +
-                      p10.b * fx * (1 - fy) +
-                      p01.b * (1 - fx) * fy +
-                      p11.b * fx * fy)
-                  .round();
+        final r =
+            (p00.r * (1 - fx) * (1 - fy) +
+                    p10.r * fx * (1 - fy) +
+                    p01.r * (1 - fx) * fy +
+                    p11.r * fx * fy)
+                .round();
+        final g =
+            (p00.g * (1 - fx) * (1 - fy) +
+                    p10.g * fx * (1 - fy) +
+                    p01.g * (1 - fx) * fy +
+                    p11.g * fx * fy)
+                .round();
+        final b =
+            (p00.b * (1 - fx) * (1 - fy) +
+                    p10.b * fx * (1 - fy) +
+                    p01.b * (1 - fx) * fy +
+                    p11.b * fx * fy)
+                .round();
+        final a =
+            (p00.a * (1 - fx) * (1 - fy) +
+                    p10.a * fx * (1 - fy) +
+                    p01.a * (1 - fx) * fy +
+                    p11.a * fx * fy)
+                .round();
 
-          result.setPixel(x, y, img.ColorRgb8(r, g, b));
-        } else if (x0 >= 0 && x0 < src.width && y0 >= 0 && y0 < src.height) {
-          // Nearest neighbor for edge pixels
-          result.setPixel(x, y, src.getPixel(x0, y0));
-        }
+        result.setPixelRgba(x, y, r, g, b, a);
       }
     }
 
@@ -232,6 +353,14 @@ class ImageUtils {
         point.y.clamp(0.0, imageHeight - 1.0),
       );
     }).toList();
+  }
+
+  static Point? normalize(Point vector) {
+    final length = math.sqrt(vector.x * vector.x + vector.y * vector.y);
+    if (length == 0) {
+      return null;
+    }
+    return Point(vector.x / length, vector.y / length);
   }
 
   static Float32List imageToTensor(

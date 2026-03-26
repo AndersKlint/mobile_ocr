@@ -14,6 +14,9 @@ class OcrProcessor {
   static const double angleAspectRatioThreshold = 0.5;
   static const double lowConfidenceThreshold = 0.55;
   static const int quickCheckMaxCandidates = 3;
+  static const double longLineAspectRatioThreshold = 8.0;
+  static const double longLineHorizontalPaddingRatio = 0.02;
+  static const double longLineVerticalPaddingRatio = 0.5;
 
   final OrtSession detectionSession;
   final OrtSession recognitionSession;
@@ -99,7 +102,7 @@ class OcrProcessor {
 
     final croppedImages = <img.Image>[];
     for (final box in detectionResult) {
-      final orderedPoints = ImageUtils.orderPointsClockwise(box.points);
+      final orderedPoints = _prepareRecognitionBox(bitmap, box.points);
       final cropped = ImageUtils.cropTextRegion(bitmap, orderedPoints);
       croppedImages.add(cropped);
     }
@@ -274,7 +277,7 @@ class OcrProcessor {
     img.Image bitmap,
     TextBox box,
   ) async {
-    final orderedPoints = ImageUtils.orderPointsClockwise(box.points);
+    final orderedPoints = _prepareRecognitionBox(bitmap, box.points);
     final crop = ImageUtils.cropTextRegion(bitmap, orderedPoints);
     final crops = [crop];
     final classificationMask = [false];
@@ -406,6 +409,25 @@ class OcrProcessor {
       start.x + (end.x - start.x) * clamped,
       start.y + (end.y - start.y) * clamped,
     );
+  }
+
+  List<Point> _prepareRecognitionBox(img.Image bitmap, List<Point> points) {
+    final orderedPoints = ImageUtils.orderPointsClockwise(points);
+    final width = ImageUtils.quadWidth(orderedPoints);
+    final height = ImageUtils.quadHeight(orderedPoints);
+    final aspectRatio = height <= 0 ? 0.0 : width / height;
+
+    if (aspectRatio >= longLineAspectRatioThreshold) {
+      return ImageUtils.expandBox(
+        orderedPoints,
+        horizontalPaddingRatio: longLineHorizontalPaddingRatio,
+        verticalPaddingRatio: longLineVerticalPaddingRatio,
+        imageWidth: bitmap.width,
+        imageHeight: bitmap.height,
+      );
+    }
+
+    return orderedPoints;
   }
 
   Future<void> close() async {

@@ -1,14 +1,16 @@
 import 'dart:math' as math;
 import 'dart:typed_data';
-import 'package:onnxruntime_v2/onnxruntime_v2.dart';
+import 'package:clipper2/clipper2.dart' as clipper;
 import 'package:image/image.dart' as img;
+import 'package:onnxruntime_v2/onnxruntime_v2.dart';
 import 'types.dart';
 import 'image_utils.dart';
 import 'fast_image_loader.dart';
 import 'fast_tensor_reader.dart';
 
 class TextDetector {
-  static const int limitSideLen = 1920;
+  static const int limitSideLen = 960;
+  static const String limitType = 'max';
   static const double thresh = 0.3;
   static const double boxThresh = 0.6;
   static const double unclipRatio = 1.5;
@@ -132,17 +134,46 @@ class TextDetector {
     return (inputTensor, resizedWidth, resizedHeight);
   }
 
-  (int, int) calculateResizeDimensions(int width, int height) {
+  static (int, int) calculateResizeDimensions(int width, int height) {
     final maxSide = width > height ? width : height;
-    final ratio = maxSide > limitSideLen ? limitSideLen / maxSide : 1.0;
+    final minSide = width < height ? width : height;
 
-    var resizedWidth = (width * ratio).round().clamp(1, 10000);
-    var resizedHeight = (height * ratio).round().clamp(1, 10000);
+    double ratio;
+    switch (limitType) {
+      case 'max':
+        ratio = maxSide > limitSideLen ? limitSideLen / maxSide : 1.0;
+        break;
+      case 'min':
+        ratio = minSide < limitSideLen ? limitSideLen / minSide : 1.0;
+        break;
+      case 'resize_long':
+        ratio = limitSideLen / maxSide;
+        break;
+      default:
+        throw StateError('Unsupported limitType: $limitType');
+    }
 
-    resizedWidth = (((resizedWidth + 31) / 32).floor() * 32).clamp(32, 10000);
-    resizedHeight = (((resizedHeight + 31) / 32).floor() * 32).clamp(32, 10000);
+    var resizedWidth = (width * ratio).toInt().clamp(1, 10000);
+    var resizedHeight = (height * ratio).toInt().clamp(1, 10000);
+
+    resizedWidth = math.max(_roundToNearestMultipleOf32(resizedWidth), 32);
+    resizedHeight = math.max(_roundToNearestMultipleOf32(resizedHeight), 32);
 
     return (resizedWidth, resizedHeight);
+  }
+
+  static int _roundToNearestMultipleOf32(int value) {
+    final scaled = value / 32.0;
+    final lower = scaled.floor();
+    final fraction = scaled - lower;
+
+    if (fraction < 0.5) {
+      return lower * 32;
+    }
+    if (fraction > 0.5) {
+      return (lower + 1) * 32;
+    }
+    return (lower.isEven ? lower : lower + 1) * 32;
   }
 
   Future<void> postprocessDetection({
@@ -156,30 +187,22 @@ class TextDetector {
     final prob = FastTensorReader.asFloat32List(output);
     if (prob == null || prob.isEmpty) return;
 
-    final binaryMap = List.generate(
-      resizedHeight,
-      (y) => List.generate(resizedWidth, (x) {
-        final idx = y * resizedWidth + x;
-        return idx < prob.length && prob[idx] > thresh;
-      }),
-    );
+    final binaryMap = buildBinaryMap(prob, resizedWidth, resizedHeight);
+    final contours = traceContours(binaryMap);
+    contours.sort((a, b) => polygonArea(b).compareTo(polygonArea(a)));
 
-    final components = extractConnectedComponents(binaryMap)
-      ..sort((a, b) => b.length.compareTo(a.length));
-
-    final topComponents = components.take(maxCandidates).toList();
+    final topContours = contours.take(maxCandidates).toList();
 
     final scaleX = originalWidth / resizedWidth;
     final scaleY = originalHeight / resizedHeight;
 
-    for (final component in topComponents) {
-      if (component.length < 4) continue;
+    for (final contour in topContours) {
+      if (contour.length < 4) continue;
 
-      final hull = convexHull(component);
-      if (hull.length < 3) continue;
-
-      final rect = minimumAreaRectangle(hull, pointsAreConvex: true);
-      if (rect.isEmpty) continue;
+      final miniBoxResult = getMiniBox(contour);
+      final rect = miniBoxResult.$1;
+      final shortSide = miniBoxResult.$2;
+      if (rect.isEmpty || shortSide < minSize) continue;
 
       final score = calculateBoxScore(prob, resizedWidth, resizedHeight, rect);
       if (score < boxThresh) continue;
@@ -187,14 +210,10 @@ class TextDetector {
       final unclippedPolygon = unclipBox(rect, unclipRatio);
       if (unclippedPolygon.isEmpty) continue;
 
-      final expandedRect = minimumAreaRectangle(
-        unclippedPolygon,
-        pointsAreConvex: false,
-      );
-      if (expandedRect.isEmpty) continue;
-
-      final minSide = getMinSide(expandedRect);
-      if (minSide < minSize) continue;
+      final expandedMiniBox = getMiniBox(unclippedPolygon);
+      final expandedRect = expandedMiniBox.$1;
+      final expandedShortSide = expandedMiniBox.$2;
+      if (expandedRect.isEmpty || expandedShortSide < minSize + 2) continue;
 
       final clippedRect = ImageUtils.clipBoxToImageBounds(
         expandedRect,
@@ -210,6 +229,90 @@ class TextDetector {
       final shouldBreak = handler(TextBox(orderedPoints), score);
       if (shouldBreak) break;
     }
+  }
+
+  static List<List<bool>> buildBinaryMap(
+    Float32List prob,
+    int width,
+    int height,
+  ) {
+    return List.generate(
+      height,
+      (y) => List.generate(width, (x) {
+        final idx = y * width + x;
+        return idx < prob.length && prob[idx] > thresh;
+      }),
+    );
+  }
+
+  static List<List<Point>> traceContours(List<List<bool>> binaryMap) {
+    final height = binaryMap.length;
+    final width = height > 0 ? binaryMap[0].length : 0;
+    final visited = List.generate(height, (_) => List.filled(width, false));
+    final contours = <List<Point>>[];
+
+    bool isBoundaryPixel(int x, int y) {
+      if (!binaryMap[y][x]) return false;
+      for (int dy = -1; dy <= 1; dy++) {
+        for (int dx = -1; dx <= 1; dx++) {
+          if (dx == 0 && dy == 0) continue;
+          final nx = x + dx;
+          final ny = y + dy;
+          if (nx < 0 || nx >= width || ny < 0 || ny >= height) {
+            return true;
+          }
+          if (!binaryMap[ny][nx]) {
+            return true;
+          }
+        }
+      }
+      return false;
+    }
+
+    final stack = <(int, int)>[];
+    for (int y = 0; y < height; y++) {
+      for (int x = 0; x < width; x++) {
+        if (!binaryMap[y][x] || visited[y][x]) continue;
+
+        final contour = <Point>[];
+        stack.clear();
+        stack.add((x, y));
+        visited[y][x] = true;
+
+        while (stack.isNotEmpty) {
+          final (cx, cy) = stack.removeLast();
+          if (isBoundaryPixel(cx, cy)) {
+            contour.add(Point(cx.toDouble(), cy.toDouble()));
+          }
+
+          for (int dy = -1; dy <= 1; dy++) {
+            for (int dx = -1; dx <= 1; dx++) {
+              if (dx == 0 && dy == 0) continue;
+              final nx = cx + dx;
+              final ny = cy + dy;
+              if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
+              if (!binaryMap[ny][nx] || visited[ny][nx]) continue;
+              visited[ny][nx] = true;
+              stack.add((nx, ny));
+            }
+          }
+        }
+
+        if (contour.length >= 4) {
+          contours.add(convexHull(contour));
+        }
+      }
+    }
+
+    return contours;
+  }
+
+  static (List<Point>, double) getMiniBox(List<Point> contour) {
+    final rect = minimumAreaRectangle(contour, pointsAreConvex: false);
+    if (rect.isEmpty) {
+      return ([], 0);
+    }
+    return (ImageUtils.orderPointsClockwise(rect), getMinSide(rect));
   }
 
   List<List<Point>> extractConnectedComponents(List<List<bool>> binaryMap) {
@@ -257,7 +360,7 @@ class TextDetector {
     return components;
   }
 
-  double calculateBoxScore(
+  static double calculateBoxScore(
     Float32List prob,
     int width,
     int height,
@@ -277,13 +380,24 @@ class TextDetector {
 
     if (maxX < minX || maxY < minY) return 0;
 
+    final maskWidth = maxX - minX + 1;
+    final maskHeight = maxY - minY + 1;
+    final maskImage = img.Image(width: maskWidth, height: maskHeight);
+    img.fill(maskImage, color: img.ColorRgb8(0, 0, 0));
+    img.fillPolygon(
+      maskImage,
+      vertices: polygon
+          .map((point) => img.Point(point.x - minX, point.y - minY))
+          .toList(growable: false),
+      color: img.ColorRgb8(255, 255, 255),
+    );
+
     double sum = 0;
     int count = 0;
-
-    for (int y = minY; y <= maxY; y++) {
-      for (int x = minX; x <= maxX; x++) {
-        if (isPointInsideQuad(x + 0.5, y + 0.5, polygon)) {
-          sum += prob[y * width + x];
+    for (int y = 0; y < maskHeight; y++) {
+      for (int x = 0; x < maskWidth; x++) {
+        if (maskImage.getPixel(x, y).r > 0) {
+          sum += prob[(y + minY) * width + (x + minX)];
           count++;
         }
       }
@@ -313,7 +427,7 @@ class TextDetector {
     return true;
   }
 
-  List<Point> convexHull(List<Point> points) {
+  static List<Point> convexHull(List<Point> points) {
     if (points.length < 3) return points;
 
     final sorted = List<Point>.from(points)
@@ -356,11 +470,11 @@ class TextDetector {
     return [...lower, ...upper];
   }
 
-  double crossProduct(Point o, Point a, Point b) {
+  static double crossProduct(Point o, Point a, Point b) {
     return (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
   }
 
-  List<Point> minimumAreaRectangle(
+  static List<Point> minimumAreaRectangle(
     List<Point> points, {
     bool pointsAreConvex = false,
   }) {
@@ -425,7 +539,7 @@ class TextDetector {
     return bestRect.isEmpty ? axisAlignedBoundingBox(hull) : bestRect;
   }
 
-  Point? normalizeVector(Point from, Point to) {
+  static Point? normalizeVector(Point from, Point to) {
     final dx = to.x - from.x;
     final dy = to.y - from.y;
     final length = math.sqrt(dx * dx + dy * dy);
@@ -433,7 +547,7 @@ class TextDetector {
     return Point(dx / length, dy / length);
   }
 
-  List<Point> axisAlignedBoundingBox(List<Point> points) {
+  static List<Point> axisAlignedBoundingBox(List<Point> points) {
     if (points.isEmpty) return [];
 
     final minX = points.map((p) => p.x).reduce(math.min);
@@ -490,21 +604,44 @@ class TextDetector {
     return ordered;
   }
 
-  List<Point> unclipBox(List<Point> box, double unclipRatio) {
+  static List<Point> unclipBox(List<Point> box, double unclipRatio) {
     if (box.length < 3) return [];
 
-    final area = polygonSignedArea(box);
+    final area = polygonArea(box);
     final perimeter = polygonPerimeter(box);
-    if (perimeter <= epsilon) return [];
+    if (perimeter <= epsilon || area <= epsilon) return [];
 
-    final offset = area.abs() * unclipRatio / perimeter;
-    if (offset <= epsilon) return box;
+    final distance = area * unclipRatio / perimeter;
+    final scale = 100.0;
+    final path = box
+        .map(
+          (point) => clipper.Point64.fromDouble(point.x, point.y, scale: scale),
+        )
+        .toList(growable: false);
 
-    final expanded = offsetPolygon(box, offset);
-    return expanded.length >= 3 ? expanded : [];
+    final offset = clipper.ClipperOffset();
+    offset.addPath(
+      path,
+      joinType: clipper.JoinType.round,
+      endType: clipper.EndType.polygon,
+    );
+
+    final solution = offset.execute(delta: distance * scale);
+    if (solution.isEmpty) {
+      return [];
+    }
+
+    solution.sort((a, b) => b.area.abs().compareTo(a.area.abs()));
+    return solution.first
+        .map((point) => Point(point.x / scale, point.y / scale))
+        .toList(growable: false);
   }
 
-  double getMinSide(List<Point> box) {
+  static double polygonArea(List<Point> points) {
+    return polygonSignedArea(points).abs();
+  }
+
+  static double getMinSide(List<Point> box) {
     if (box.length < 2) return 0;
     var minSide = double.infinity;
     for (int i = 0; i < box.length; i++) {
@@ -517,7 +654,7 @@ class TextDetector {
     return minSide == double.infinity ? 0 : minSide;
   }
 
-  double polygonSignedArea(List<Point> points) {
+  static double polygonSignedArea(List<Point> points) {
     double area = 0;
     for (int i = 0; i < points.length; i++) {
       final j = (i + 1) % points.length;
@@ -526,84 +663,12 @@ class TextDetector {
     return area / 2;
   }
 
-  double polygonPerimeter(List<Point> points) {
+  static double polygonPerimeter(List<Point> points) {
     double perimeter = 0;
     for (int i = 0; i < points.length; i++) {
       final j = (i + 1) % points.length;
       perimeter += ImageUtils.distance(points[i], points[j]);
     }
     return perimeter;
-  }
-
-  List<Point> offsetPolygon(List<Point> points, double offset) {
-    final count = points.length;
-    if (count < 3) return [];
-
-    final isCounterClockwise = polygonSignedArea(points) > 0;
-    final result = <Point>[];
-
-    for (int i = 0; i < count; i++) {
-      final prev = points[(i - 1 + count) % count];
-      final curr = points[i];
-      final next = points[(i + 1) % count];
-
-      final edge1 = Point(curr.x - prev.x, curr.y - prev.y);
-      final edge2 = Point(next.x - curr.x, next.y - curr.y);
-
-      final dir1 = normalize(edge1);
-      final dir2 = normalize(edge2);
-      if (dir1 == null || dir2 == null) continue;
-
-      final normal1 = isCounterClockwise
-          ? Point(dir1.y, -dir1.x)
-          : Point(-dir1.y, dir1.x);
-      final normal2 = isCounterClockwise
-          ? Point(dir2.y, -dir2.x)
-          : Point(-dir2.y, dir2.x);
-
-      final offsetPoint1 = Point(
-        curr.x + normal1.x * offset,
-        curr.y + normal1.y * offset,
-      );
-      final offsetPoint2 = Point(
-        curr.x + normal2.x * offset,
-        curr.y + normal2.y * offset,
-      );
-
-      final intersection = intersectLines(
-        offsetPoint1,
-        dir1,
-        offsetPoint2,
-        dir2,
-      );
-      result.add(intersection ?? Point(curr.x, curr.y));
-    }
-
-    return result;
-  }
-
-  Point? normalize(Point vector) {
-    final length = math.sqrt(vector.x * vector.x + vector.y * vector.y);
-    if (length < epsilon) return null;
-    return Point(vector.x / length, vector.y / length);
-  }
-
-  Point? intersectLines(
-    Point point,
-    Point direction,
-    Point otherPoint,
-    Point otherDirection,
-  ) {
-    final cross =
-        direction.x * otherDirection.y - direction.y * otherDirection.x;
-    if (cross.abs() < epsilon) {
-      return null;
-    }
-
-    final diffX = otherPoint.x - point.x;
-    final diffY = otherPoint.y - point.y;
-    final t = (diffX * otherDirection.y - diffY * otherDirection.x) / cross;
-
-    return Point(point.x + direction.x * t, point.y + direction.y * t);
   }
 }
