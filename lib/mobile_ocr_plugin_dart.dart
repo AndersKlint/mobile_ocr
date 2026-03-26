@@ -13,6 +13,7 @@ class DartMobileOcr extends MobileOcrPlatform {
   String? _modelPath;
   bool _isInitialized = false;
   bool _isInitializing = false;
+  String? _processorDebugDumpDir;
 
   static const String _modelVersion = 'pp-ocrv5-202410';
   static const List<String> _modelFiles = [
@@ -78,6 +79,22 @@ class DartMobileOcr extends MobileOcrPlatform {
   }
 
   Future<void> _ensureInitialized() async {
+    await _ensureInitializedWithDebugDumpDir(null);
+  }
+
+  Future<void> _ensureInitializedWithDebugDumpDir(String? debugDumpDir) async {
+    if (_isInitialized &&
+        _processor != null &&
+        _processorDebugDumpDir == debugDumpDir) {
+      return;
+    }
+
+    if (_isInitialized && _processorDebugDumpDir != debugDumpDir) {
+      _processor?.close();
+      _processor = null;
+      _isInitialized = false;
+    }
+
     if (_isInitialized) return;
     if (_isInitializing) {
       while (_isInitializing) {
@@ -117,8 +134,10 @@ class DartMobileOcr extends MobileOcrPlatform {
             : null,
         dictionaryPath: dictionaryPath,
         useAngleClassification: await File(classificationModel).exists(),
+        debugDumpDir: debugDumpDir,
       );
 
+      _processorDebugDumpDir = debugDumpDir;
       _isInitialized = true;
     } finally {
       _isInitializing = false;
@@ -153,8 +172,9 @@ class DartMobileOcr extends MobileOcrPlatform {
   Future<List<Map<dynamic, dynamic>>> detectText({
     required String imagePath,
     bool includeAllConfidenceScores = false,
+    String? debugDumpDir,
   }) async {
-    await _ensureInitialized();
+    await _ensureInitializedWithDebugDumpDir(debugDumpDir);
 
     final file = File(imagePath);
     if (!await file.exists()) {
@@ -241,5 +261,6 @@ class DartMobileOcr extends MobileOcrPlatform {
     _processor?.close();
     _processor = null;
     _isInitialized = false;
+    _processorDebugDumpDir = null;
   }
 }

@@ -4,6 +4,7 @@ import 'package:onnxruntime_v2/onnxruntime_v2.dart';
 import 'package:image/image.dart' as img;
 import 'types.dart';
 import 'image_utils.dart';
+import 'ocr_debug_dumper.dart';
 import 'text_detector.dart';
 import 'text_recognizer.dart';
 import 'text_classifier.dart';
@@ -23,6 +24,7 @@ class OcrProcessor {
   final OrtSession? classificationSession;
   final List<String> characterDict;
   final bool useAngleClassification;
+  final OcrDebugSession? debugSession;
 
   late final TextDetector _detector;
   late final TextRecognizer _recognizer;
@@ -34,11 +36,19 @@ class OcrProcessor {
     required this.classificationSession,
     required this.characterDict,
     this.useAngleClassification = true,
+    this.debugSession,
   }) {
-    _detector = TextDetector(detectionSession);
-    _recognizer = TextRecognizer(recognitionSession, characterDict);
+    _detector = TextDetector(detectionSession, debugSession: debugSession);
+    _recognizer = TextRecognizer(
+      recognitionSession,
+      characterDict,
+      debugSession: debugSession,
+    );
     if (useAngleClassification && classificationSession != null) {
-      _classifier = TextClassifier(classificationSession!);
+      _classifier = TextClassifier(
+        classificationSession!,
+        debugSession: debugSession,
+      );
     }
   }
 
@@ -48,6 +58,7 @@ class OcrProcessor {
     required String? classificationModelPath,
     required String dictionaryPath,
     bool useAngleClassification = true,
+    String? debugDumpDir,
   }) async {
     OrtEnv.instance.init();
 
@@ -80,6 +91,7 @@ class OcrProcessor {
     final dictFile = File(dictionaryPath);
     final dictLines = await dictFile.readAsLines();
     final characterDict = ['blank', ...dictLines, ' '];
+    final debugSession = await OcrDebugSession.create(debugDumpDir);
 
     return OcrProcessor(
       detectionSession: detectionSession,
@@ -87,6 +99,7 @@ class OcrProcessor {
       classificationSession: classificationSession,
       characterDict: characterDict,
       useAngleClassification: useAngleClassification,
+      debugSession: debugSession,
     );
   }
 
@@ -94,6 +107,7 @@ class OcrProcessor {
     img.Image bitmap, {
     bool includeAllConfidenceScores = false,
   }) async {
+    await debugSession?.saveImage('00_source/source.png', bitmap);
     final detectionResult = await _detector.detect(bitmap);
 
     if (detectionResult.isEmpty) {
@@ -101,11 +115,15 @@ class OcrProcessor {
     }
 
     final croppedImages = <img.Image>[];
+    final preparedBoxes = <List<Point>>[];
     for (final box in detectionResult) {
       final orderedPoints = _prepareRecognitionBox(bitmap, box.points);
       final cropped = ImageUtils.cropTextRegion(bitmap, orderedPoints);
+      preparedBoxes.add(orderedPoints);
       croppedImages.add(cropped);
     }
+
+    await _dumpPreparedCrops(detectionResult, preparedBoxes, croppedImages);
 
     final classificationMask = List<bool>.filled(croppedImages.length, false);
     final rotationStates = List<bool>.filled(croppedImages.length, false);
@@ -198,6 +216,19 @@ class OcrProcessor {
     }
 
     debugPrint('Filtered to ${filteredResults.length} results');
+
+    await debugSession?.writeJson('04_results/final_results.json', {
+      'count': filteredResults.length,
+      'results': List.generate(filteredResults.length, (index) {
+        return {
+          'text': filteredTexts[index],
+          'confidence': filteredScores[index],
+          'points': filteredResults[index].points
+              .map((point) => {'x': point.x, 'y': point.y})
+              .toList(growable: false),
+        };
+      }),
+    });
 
     return OcrResult(
       boxes: filteredResults,
@@ -428,6 +459,38 @@ class OcrProcessor {
     }
 
     return orderedPoints;
+  }
+
+  Future<void> _dumpPreparedCrops(
+    List<TextBox> detectionResult,
+    List<List<Point>> preparedBoxes,
+    List<img.Image> croppedImages,
+  ) async {
+    if (debugSession == null) {
+      return;
+    }
+
+    final boxMetadata = <Map<String, Object?>>[];
+    for (int index = 0; index < croppedImages.length; index++) {
+      final rawBox = detectionResult[index].points;
+      final preparedBox = preparedBoxes[index];
+      final crop = croppedImages[index];
+      final prefix = index.toString().padLeft(3, '0');
+      await debugSession!.saveImage('02_crops/${prefix}_crop.png', crop);
+      boxMetadata.add({
+        'index': index,
+        'rawPoints': rawBox
+            .map((point) => {'x': point.x, 'y': point.y})
+            .toList(growable: false),
+        'preparedPoints': preparedBox
+            .map((point) => {'x': point.x, 'y': point.y})
+            .toList(growable: false),
+        'cropWidth': crop.width,
+        'cropHeight': crop.height,
+      });
+    }
+
+    await debugSession!.writeJson('02_crops/boxes.json', boxMetadata);
   }
 
   Future<void> close() async {

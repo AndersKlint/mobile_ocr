@@ -26,6 +26,7 @@ abstract class MobileOcrPlatform extends PlatformInterface {
   Future<List<Map<dynamic, dynamic>>> detectText({
     required String imagePath,
     bool includeAllConfidenceScores = false,
+    String? debugDumpDir,
   }) {
     throw UnimplementedError('detectText() has not been implemented.');
   }

@@ -7,20 +7,22 @@ import 'types.dart';
 import 'image_utils.dart';
 import 'fast_image_loader.dart';
 import 'fast_tensor_reader.dart';
+import 'ocr_debug_dumper.dart';
 
 class TextDetector {
   static const int limitSideLen = 960;
   static const String limitType = 'max';
-  static const double thresh = 0.3;
-  static const double boxThresh = 0.6;
-  static const double unclipRatio = 1.5;
+  static const double thresh = 0.5;
+  static const double boxThresh = 0.7;
+  static const double unclipRatio = 1.3;
   static const int minSize = 3;
   static const int maxCandidates = 1000;
   static const double epsilon = 1e-6;
 
   final OrtSession session;
+  final OcrDebugSession? debugSession;
 
-  TextDetector(this.session);
+  TextDetector(this.session, {this.debugSession});
 
   Future<List<TextBox>> detect(img.Image bitmap) async {
     final boxes = <TextBox>[];
@@ -77,6 +79,20 @@ class TextDetector {
     final inputTensor = preprocessResult.$1;
     final resizedWidth = preprocessResult.$2;
     final resizedHeight = preprocessResult.$3;
+    final resizedImage = preprocessResult.$4;
+
+    await debugSession?.saveImage('01_detector/input.png', resizedImage);
+    await debugSession?.writeJson('01_detector/meta.json', {
+      'originalWidth': originalWidth,
+      'originalHeight': originalHeight,
+      'resizedWidth': resizedWidth,
+      'resizedHeight': resizedHeight,
+      'limitSideLen': limitSideLen,
+      'limitType': limitType,
+      'thresh': thresh,
+      'boxThresh': boxThresh,
+      'unclipRatio': unclipRatio,
+    });
 
     try {
       final inputs = {'x': inputTensor};
@@ -101,7 +117,9 @@ class TextDetector {
     }
   }
 
-  Future<(OrtValueTensor, int, int)> preprocessImage(img.Image bitmap) async {
+  Future<(OrtValueTensor, int, int, img.Image)> preprocessImage(
+    img.Image bitmap,
+  ) async {
     final originalWidth = bitmap.width;
     final originalHeight = bitmap.height;
 
@@ -125,13 +143,20 @@ class TextDetector {
       throw StateError('Failed to preprocess image');
     }
 
+    final resizedImage = img.copyResize(
+      bitmap,
+      width: resizedWidth,
+      height: resizedHeight,
+      interpolation: img.Interpolation.linear,
+    );
+
     final shape = [1, 3, resizedHeight, resizedWidth];
     final inputTensor = OrtValueTensor.createTensorWithDataList(
       inputArray,
       shape,
     );
 
-    return (inputTensor, resizedWidth, resizedHeight);
+    return (inputTensor, resizedWidth, resizedHeight, resizedImage);
   }
 
   static (int, int) calculateResizeDimensions(int width, int height) {
@@ -187,15 +212,28 @@ class TextDetector {
     final prob = FastTensorReader.asFloat32List(output);
     if (prob == null || prob.isEmpty) return;
 
+    await _dumpProbabilityMap(prob, resizedWidth, resizedHeight);
+
     final binaryMap = buildBinaryMap(prob, resizedWidth, resizedHeight);
     final contours = traceContours(binaryMap);
     contours.sort((a, b) => polygonArea(b).compareTo(polygonArea(a)));
+    await debugSession?.writeJson(
+      '01_detector/contours.json',
+      contours
+          .map(
+            (contour) => contour
+                .map((point) => {'x': point.x, 'y': point.y})
+                .toList(growable: false),
+          )
+          .toList(growable: false),
+    );
 
     final topContours = contours.take(maxCandidates).toList();
 
     final scaleX = originalWidth / resizedWidth;
     final scaleY = originalHeight / resizedHeight;
 
+    final acceptedBoxes = <Map<String, Object?>>[];
     for (final contour in topContours) {
       if (contour.length < 4) continue;
 
@@ -226,9 +264,63 @@ class TextDetector {
       }).toList();
 
       final orderedPoints = ImageUtils.orderPointsClockwise(scaledPoints);
+      acceptedBoxes.add({
+        'score': score,
+        'points': orderedPoints
+            .map((point) => {'x': point.x, 'y': point.y})
+            .toList(growable: false),
+      });
       final shouldBreak = handler(TextBox(orderedPoints), score);
       if (shouldBreak) break;
     }
+
+    await debugSession?.writeJson('01_detector/boxes.json', acceptedBoxes);
+  }
+
+  Future<void> _dumpProbabilityMap(
+    Float32List prob,
+    int resizedWidth,
+    int resizedHeight,
+  ) async {
+    if (debugSession == null) {
+      return;
+    }
+
+    final probabilityImage = img.Image(
+      width: resizedWidth,
+      height: resizedHeight,
+    );
+    final binaryImage = img.Image(width: resizedWidth, height: resizedHeight);
+
+    for (int y = 0; y < resizedHeight; y++) {
+      for (int x = 0; x < resizedWidth; x++) {
+        final value = prob[y * resizedWidth + x].clamp(0.0, 1.0);
+        final grayscale = (value * 255).round();
+        probabilityImage.setPixelRgba(
+          x,
+          y,
+          grayscale,
+          grayscale,
+          grayscale,
+          255,
+        );
+        final binaryValue = value > thresh ? 255 : 0;
+        binaryImage.setPixelRgba(
+          x,
+          y,
+          binaryValue,
+          binaryValue,
+          binaryValue,
+          255,
+        );
+      }
+    }
+
+    await debugSession!.saveImage(
+      '01_detector/probability_map.png',
+      probabilityImage,
+    );
+    await debugSession!.saveImage('01_detector/binary_map.png', binaryImage);
   }
 
   static List<List<bool>> buildBinaryMap(

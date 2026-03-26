@@ -2,6 +2,7 @@ import 'dart:typed_data';
 import 'package:onnxruntime_v2/onnxruntime_v2.dart';
 import 'package:image/image.dart' as img;
 import 'fast_tensor_reader.dart';
+import 'ocr_debug_dumper.dart';
 
 class ClassificationOutput {
   final img.Image bitmap;
@@ -17,8 +18,9 @@ class TextClassifier {
   static const int batchSize = 6;
 
   final OrtSession session;
+  final OcrDebugSession? debugSession;
 
-  TextClassifier(this.session);
+  TextClassifier(this.session, {this.debugSession});
 
   Future<List<ClassificationOutput>> classifyAndRotate(
     List<img.Image> images,
@@ -53,7 +55,7 @@ class TextClassifier {
     final inputArray = Float32List(batchSz * 3 * imgHeight * imgWidth);
 
     for (int index = 0; index < batchImages.length; index++) {
-      preprocessImage(batchImages[index], inputArray, index);
+      await preprocessImage(batchImages[index], inputArray, index);
     }
 
     final shape = [batchSz, 3, imgHeight, imgWidth];
@@ -79,11 +81,11 @@ class TextClassifier {
     return results;
   }
 
-  void preprocessImage(
+  Future<void> preprocessImage(
     img.Image bitmap,
     Float32List outputArray,
     int batchIndex,
-  ) {
+  ) async {
     final aspectRatio = bitmap.width / bitmap.height;
     final resizedWidth = (imgHeight * aspectRatio).ceil().clamp(1, imgWidth);
 
@@ -93,6 +95,33 @@ class TextClassifier {
       height: imgHeight,
       interpolation: img.Interpolation.linear,
     );
+
+    if (debugSession != null) {
+      final modelInputPreview = buildModelInputPreview(
+        resizedImage: resized,
+        targetWidth: imgWidth,
+        targetHeight: imgHeight,
+      );
+      await debugSession!.saveImage(
+        '02_classifier/${batchIndex.toString().padLeft(3, '0')}_crop.png',
+        bitmap,
+      );
+      await debugSession!.saveImage(
+        '02_classifier/${batchIndex.toString().padLeft(3, '0')}_model_input.png',
+        modelInputPreview,
+      );
+      await debugSession!.writeJson(
+        '02_classifier/${batchIndex.toString().padLeft(3, '0')}_meta.json',
+        {
+          'originalWidth': bitmap.width,
+          'originalHeight': bitmap.height,
+          'resizedWidth': resizedWidth,
+          'targetWidth': imgWidth,
+          'targetHeight': imgHeight,
+          'aspectRatio': aspectRatio,
+        },
+      );
+    }
 
     final baseOffset = batchIndex * 3 * imgHeight * imgWidth;
     final channelStride = imgHeight * imgWidth;

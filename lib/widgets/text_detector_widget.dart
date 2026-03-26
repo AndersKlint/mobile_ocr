@@ -108,6 +108,10 @@ class TextDetectorWidget extends StatefulWidget {
   /// Strings used for user-facing text in the widget.
   final TextDetectorStrings strings;
 
+  /// Optional directory where the OCR pipeline writes debug images of the
+  /// actual inputs sent to the detector/classifier/recognizer models.
+  final String? debugDumpDir;
+
   /// Controller for imperative text selection actions.
   final TextDetectorController? controller;
 
@@ -122,6 +126,7 @@ class TextDetectorWidget extends StatefulWidget {
     this.enableSelectionPreview = false,
     this.debugMode = false,
     this.strings = const TextDetectorStrings(),
+    this.debugDumpDir,
     this.controller,
   });
 
@@ -314,7 +319,10 @@ class _TextDetectorWidgetState extends State<TextDetectorWidget> {
         throw Exception(_errorMessage);
       }
 
-      final blocks = await _ocr.detectText(imagePath: imagePath);
+      final blocks = await _ocr.detectText(
+        imagePath: imagePath,
+        debugDumpDir: widget.debugDumpDir,
+      );
 
       if (mounted && widget.imagePath == requestedPath) {
         setState(() {
@@ -503,10 +511,7 @@ class _TextDetectorWidgetState extends State<TextDetectorWidget> {
       right: 0,
       child: Center(
         child: Container(
-          padding: const EdgeInsets.symmetric(
-            horizontal: 20,
-            vertical: 12,
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
           decoration: BoxDecoration(
             color: Colors.black.withValues(alpha: 0.7),
             borderRadius: BorderRadius.circular(20),
@@ -514,17 +519,11 @@ class _TextDetectorWidgetState extends State<TextDetectorWidget> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const CupertinoActivityIndicator(
-                radius: 10,
-                color: Colors.white,
-              ),
+              const CupertinoActivityIndicator(radius: 10, color: Colors.white),
               const SizedBox(width: 8),
               Text(
                 widget.strings.processingOverlayMessage,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 14,
-                ),
+                style: const TextStyle(color: Colors.white, fontSize: 14),
               ),
             ],
           ),

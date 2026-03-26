@@ -17,6 +17,7 @@ class MockMobileOcrPlatform
   Future<List<Map<dynamic, dynamic>>> detectText({
     required String imagePath,
     bool includeAllConfidenceScores = false,
+    String? debugDumpDir,
   }) async {
     return [];
   }
@@ -110,11 +111,43 @@ void main() {
 
     await tempDir.delete(recursive: true);
   });
+
+  test('detectText forwards debug dump directory', () async {
+    final tempDir = await Directory.systemTemp.createTemp('mobile_ocr_test');
+    final tempFile = File('${tempDir.path}/image.png');
+    await tempFile.writeAsBytes([0x00]);
+
+    final mobileOcr = MobileOcr();
+    final verifyingPlatform = _VerifyingMobileOcrPlatform();
+    MobileOcrPlatform.instance = verifyingPlatform;
+
+    await mobileOcr.detectText(
+      imagePath: tempFile.path,
+      debugDumpDir: '${tempDir.path}/debug',
+    );
+
+    expect(verifyingPlatform.lastImagePath, tempFile.path);
+    expect(verifyingPlatform.lastDebugDumpDir, '${tempDir.path}/debug');
+
+    await tempDir.delete(recursive: true);
+  });
 }
 
 class _VerifyingMobileOcrPlatform extends MockMobileOcrPlatform {
   String? lastImagePath;
+  String? lastDebugDumpDir;
   bool response = false;
+
+  @override
+  Future<List<Map<dynamic, dynamic>>> detectText({
+    required String imagePath,
+    bool includeAllConfidenceScores = false,
+    String? debugDumpDir,
+  }) async {
+    lastImagePath = imagePath;
+    lastDebugDumpDir = debugDumpDir;
+    return [];
+  }
 
   @override
   Future<bool> hasText({required String imagePath}) async {

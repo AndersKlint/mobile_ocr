@@ -22,6 +22,7 @@ class MobileOcr {
   Future<List<TextBlock>> detectText({
     required String imagePath,
     bool includeAllConfidenceScores = false,
+    String? debugDumpDir,
   }) async {
     final file = File(imagePath);
     if (!file.existsSync()) {
@@ -31,6 +32,7 @@ class MobileOcr {
     final results = await MobileOcrPlatform.instance.detectText(
       imagePath: file.path,
       includeAllConfidenceScores: includeAllConfidenceScores,
+      debugDumpDir: debugDumpDir,
     );
     return results.map(TextBlock.fromMap).toList(growable: false);
   }

@@ -4,6 +4,7 @@ import 'package:image/image.dart' as img;
 import 'types.dart';
 import 'fast_image_loader.dart';
 import 'fast_tensor_reader.dart';
+import 'ocr_debug_dumper.dart';
 
 class TextRecognizer {
   static const int imgHeight = 48;
@@ -13,8 +14,9 @@ class TextRecognizer {
 
   final OrtSession session;
   final List<String> characterDict;
+  final OcrDebugSession? debugSession;
 
-  TextRecognizer(this.session, this.characterDict);
+  TextRecognizer(this.session, this.characterDict, {this.debugSession});
 
   Future<List<RecognitionResult>> recognize(List<img.Image> images) async {
     if (images.isEmpty) {
@@ -118,6 +120,39 @@ class TextRecognizer {
 
     if (tensor == null) {
       return 0;
+    }
+
+    if (debugSession != null) {
+      final resizedPreview = img.copyResize(
+        bitmap,
+        width: resizedWidth,
+        height: imgHeight,
+        interpolation: img.Interpolation.linear,
+      );
+      final modelInputPreview = buildModelInputPreview(
+        resizedImage: resizedPreview,
+        targetWidth: targetWidth,
+        targetHeight: imgHeight,
+      );
+      await debugSession!.saveImage(
+        '03_recognizer/${batchIndex.toString().padLeft(3, '0')}_crop.png',
+        bitmap,
+      );
+      await debugSession!.saveImage(
+        '03_recognizer/${batchIndex.toString().padLeft(3, '0')}_model_input.png',
+        modelInputPreview,
+      );
+      await debugSession!.writeJson(
+        '03_recognizer/${batchIndex.toString().padLeft(3, '0')}_meta.json',
+        {
+          'originalWidth': bitmap.width,
+          'originalHeight': bitmap.height,
+          'resizedWidth': resizedWidth,
+          'targetWidth': targetWidth,
+          'targetHeight': imgHeight,
+          'aspectRatio': aspectRatio,
+        },
+      );
     }
 
     final baseOffset = batchIndex * 3 * imgHeight * targetWidth;

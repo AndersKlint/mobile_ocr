@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:mobile_ocr/mobile_ocr.dart';
+import 'package:path/path.dart' as p;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -69,6 +70,8 @@ class _OcrDemoPageState extends State<OcrDemoPage> {
   bool? _lastHasTextResult;
   int? _currentTestImageIndex;
   bool _isLoadingTestImage = false;
+  bool _dumpDebugImages = true;
+  String? _lastDebugDumpDir;
 
   @override
   void dispose() {
@@ -124,6 +127,17 @@ class _OcrDemoPageState extends State<OcrDemoPage> {
                 alignment: Alignment.centerLeft,
                 child: Text(
                   'hasText result: ${_lastHasTextResult!}',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
+            ),
+          if (_lastDebugDumpDir != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'debug dump: $_lastDebugDumpDir',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ),
@@ -190,6 +204,9 @@ class _OcrDemoPageState extends State<OcrDemoPage> {
               imagePath: path,
               backgroundColor: Colors.transparent,
               debugMode: true,
+              debugDumpDir: _dumpDebugImages
+                  ? _buildDebugDumpDirectory(path)
+                  : null,
               enableSelectionPreview: true,
               controller: _textDetectorController,
               onTextCopied: (text) => _showSnackBar(
@@ -254,6 +271,22 @@ class _OcrDemoPageState extends State<OcrDemoPage> {
             ),
             if (_testImageAssets.isNotEmpty) ...[
               const SizedBox(height: 12),
+              SwitchListTile.adaptive(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Dump model input debug images'),
+                subtitle: const Text(
+                  'Saves the exact detector, classifier, and recognizer inputs',
+                ),
+                value: _dumpDebugImages,
+                onChanged: (value) {
+                  setState(() {
+                    _dumpDebugImages = value;
+                    if (!value) {
+                      _lastDebugDumpDir = null;
+                    }
+                  });
+                },
+              ),
               Row(
                 children: [
                   IconButton(
@@ -348,11 +381,15 @@ class _OcrDemoPageState extends State<OcrDemoPage> {
         if (file.path == null) {
           return;
         }
+        final selectedPath = file.path!;
         if (!mounted) return;
         setState(() {
-          _imagePath = file.path;
+          _imagePath = selectedPath;
           _lastHasTextResult = null;
           _isCheckingHasText = false;
+          _lastDebugDumpDir = _dumpDebugImages
+              ? _buildDebugDumpDirectory(selectedPath)
+              : null;
         });
       } else {
         final file = await _picker.pickImage(source: ImageSource.gallery);
@@ -364,6 +401,9 @@ class _OcrDemoPageState extends State<OcrDemoPage> {
           _imagePath = file.path;
           _lastHasTextResult = null;
           _isCheckingHasText = false;
+          _lastDebugDumpDir = _dumpDebugImages
+              ? _buildDebugDumpDirectory(file.path)
+              : null;
         });
       }
     } catch (error) {
@@ -394,6 +434,9 @@ class _OcrDemoPageState extends State<OcrDemoPage> {
         _imagePath = file.path;
         _lastHasTextResult = null;
         _isCheckingHasText = false;
+        _lastDebugDumpDir = _dumpDebugImages
+            ? _buildDebugDumpDirectory(file.path)
+            : null;
       });
     } catch (error) {
       if (!mounted) return;
@@ -428,6 +471,9 @@ class _OcrDemoPageState extends State<OcrDemoPage> {
         _imagePath = filePath;
         _lastHasTextResult = null;
         _isCheckingHasText = false;
+        _lastDebugDumpDir = _dumpDebugImages
+            ? _buildDebugDumpDirectory(filePath)
+            : null;
       });
     } catch (error) {
       if (!mounted) return;
@@ -475,6 +521,14 @@ class _OcrDemoPageState extends State<OcrDemoPage> {
     final fileName = assetPath.split('/').last;
     final baseName = fileName.split('.').first;
     return baseName.replaceAll('_', ' ');
+  }
+
+  String _buildDebugDumpDirectory(String imagePath) {
+    final fileName = p.basename(imagePath);
+    final baseName = p.basenameWithoutExtension(fileName);
+    final safeName = baseName.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
+    final tempDir = Directory.systemTemp.path;
+    return '$tempDir${Platform.pathSeparator}mobile_ocr_debug${Platform.pathSeparator}$safeName';
   }
 
   int _wrapIndex(int value, int length) {
