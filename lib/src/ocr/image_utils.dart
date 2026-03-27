@@ -10,6 +10,8 @@ class ImageUtils {
   static const int _verticalTrimMinBlankRows = 2;
   static const int _verticalTrimMinContrast = 24;
   static const int _verticalTrimMergeGapRows = 3;
+  static const double _recognitionContrastBoost = 0.15;
+  static const double _recognitionBrightnessBoost = 0.05;
 
   static List<Point> orderPointsClockwise(List<Point> points) {
     if (points.length != 4) {
@@ -224,8 +226,39 @@ class ImageUtils {
     );
   }
 
+  static img.Image enhanceRecognitionCrop(img.Image image) {
+    final adjusted = img.Image(width: image.width, height: image.height);
+    final contrast = 1.0 + _recognitionContrastBoost;
+    final brightnessOffset = 255.0 * _recognitionBrightnessBoost;
+
+    for (int y = 0; y < image.height; y++) {
+      for (int x = 0; x < image.width; x++) {
+        final pixel = image.getPixel(x, y);
+        adjusted.setPixelRgba(
+          x,
+          y,
+          _applyRecognitionToneAdjustment(pixel.r, contrast, brightnessOffset),
+          _applyRecognitionToneAdjustment(pixel.g, contrast, brightnessOffset),
+          _applyRecognitionToneAdjustment(pixel.b, contrast, brightnessOffset),
+          pixel.a,
+        );
+      }
+    }
+
+    return adjusted;
+  }
+
   static int _pixelLuminance(num r, num g, num b) {
     return ((299 * r) + (587 * g) + (114 * b)).round() ~/ 1000;
+  }
+
+  static int _applyRecognitionToneAdjustment(
+    num value,
+    double contrast,
+    double brightnessOffset,
+  ) {
+    final adjusted = ((value - 128.0) * contrast) + 128.0 + brightnessOffset;
+    return adjusted.round().clamp(0, 255);
   }
 
   static List<_VerticalBand> _buildVerticalBands(

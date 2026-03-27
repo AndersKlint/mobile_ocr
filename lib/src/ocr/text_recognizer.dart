@@ -4,6 +4,7 @@ import 'package:image/image.dart' as img;
 import 'types.dart';
 import 'fast_image_loader.dart';
 import 'fast_tensor_reader.dart';
+import 'image_utils.dart';
 import 'ocr_debug_dumper.dart';
 
 class TextRecognizer {
@@ -103,6 +104,7 @@ class TextRecognizer {
     int batchIndex,
     int targetWidth,
   ) async {
+    final enhancedBitmap = ImageUtils.enhanceRecognitionCrop(bitmap);
     final aspectRatio = bitmap.width / bitmap.height;
     final resizedWidth = (imgHeight * aspectRatio).ceil().clamp(1, targetWidth);
 
@@ -110,7 +112,7 @@ class TextRecognizer {
     final std = [0.5, 0.5, 0.5];
 
     final tensor = await FastImageLoader.imageToTensor(
-      bitmap,
+      enhancedBitmap,
       targetWidth: resizedWidth,
       targetHeight: imgHeight,
       mean: mean,
@@ -124,7 +126,7 @@ class TextRecognizer {
 
     if (debugSession != null) {
       final resizedPreview = img.copyResize(
-        bitmap,
+        enhancedBitmap,
         width: resizedWidth,
         height: imgHeight,
         interpolation: img.Interpolation.linear,
@@ -147,6 +149,8 @@ class TextRecognizer {
         {
           'originalWidth': bitmap.width,
           'originalHeight': bitmap.height,
+          'contrastBoost': 0.15,
+          'brightnessBoost': 0.05,
           'resizedWidth': resizedWidth,
           'targetWidth': targetWidth,
           'targetHeight': imgHeight,

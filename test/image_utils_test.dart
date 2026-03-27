@@ -153,6 +153,30 @@ void main() {
         expect(bottomCenter.b, greaterThan(225));
       },
     );
+
+    test('enhanceRecognitionCrop boosts contrast and brightness mildly', () {
+      final source = img.Image(width: 3, height: 1);
+      source.setPixelRgba(0, 0, 0, 0, 0, 255);
+      source.setPixelRgba(1, 0, 170, 170, 170, 255);
+      source.setPixelRgba(2, 0, 240, 240, 240, 255);
+
+      final enhanced = ImageUtils.enhanceRecognitionCrop(source);
+
+      final black = enhanced.getPixel(0, 0);
+      expect(black.r, 0);
+      expect(black.g, 0);
+      expect(black.b, 0);
+
+      final mid = enhanced.getPixel(1, 0);
+      expect(mid.r, greaterThan(170));
+      expect(mid.g, greaterThan(170));
+      expect(mid.b, greaterThan(170));
+
+      final nearWhite = enhanced.getPixel(2, 0);
+      expect(nearWhite.r, 255);
+      expect(nearWhite.g, 255);
+      expect(nearWhite.b, 255);
+    });
   });
 
   group('TextDetector resize', () {
