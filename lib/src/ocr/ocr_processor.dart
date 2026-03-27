@@ -15,9 +15,6 @@ class OcrProcessor {
   static const double angleAspectRatioThreshold = 0.5;
   static const double lowConfidenceThreshold = 0.55;
   static const int quickCheckMaxCandidates = 3;
-  static const double longLineAspectRatioThreshold = 8.0;
-  static const double longLineHorizontalPaddingRatio = 0.05;
-  static const double longLineVerticalPaddingRatio = 0.5;
 
   final OrtSession detectionSession;
   final OrtSession recognitionSession;
@@ -25,6 +22,7 @@ class OcrProcessor {
   final List<String> characterDict;
   final bool useAngleClassification;
   final OcrDebugSession? debugSession;
+  final OcrProcessingOptions processingOptions;
 
   late final TextDetector _detector;
   late final TextRecognizer _recognizer;
@@ -37,6 +35,7 @@ class OcrProcessor {
     required this.characterDict,
     this.useAngleClassification = true,
     this.debugSession,
+    this.processingOptions = const OcrProcessingOptions(),
   }) {
     _detector = TextDetector(detectionSession, debugSession: debugSession);
     _recognizer = TextRecognizer(
@@ -59,6 +58,7 @@ class OcrProcessor {
     required String dictionaryPath,
     bool useAngleClassification = true,
     String? debugDumpDir,
+    OcrProcessingOptions processingOptions = const OcrProcessingOptions(),
   }) async {
     OrtEnv.instance.init();
 
@@ -100,6 +100,7 @@ class OcrProcessor {
       characterDict: characterDict,
       useAngleClassification: useAngleClassification,
       debugSession: debugSession,
+      processingOptions: processingOptions,
     );
   }
 
@@ -118,7 +119,11 @@ class OcrProcessor {
     final preparedBoxes = <List<Point>>[];
     for (final box in detectionResult) {
       final orderedPoints = _prepareRecognitionBox(bitmap, box.points);
-      final cropped = ImageUtils.cropTextRegion(bitmap, orderedPoints);
+      final cropped = ImageUtils.cropTextRegion(
+        bitmap,
+        orderedPoints,
+        trimWhitespace: processingOptions.trimRecognitionWhitespace,
+      );
       preparedBoxes.add(orderedPoints);
       croppedImages.add(cropped);
     }
@@ -146,7 +151,10 @@ class OcrProcessor {
       );
     }
 
-    var recognitionResults = await _recognizer.recognize(croppedImages);
+    var recognitionResults = await _recognizer.recognize(
+      croppedImages,
+      options: processingOptions,
+    );
 
     if (useAngleClassification &&
         _classifier != null &&
@@ -169,6 +177,7 @@ class OcrProcessor {
 
         final refreshed = await _recognizer.recognize(
           lowConfidenceIndices.map((i) => croppedImages[i]).toList(),
+          options: processingOptions,
         );
 
         for (
@@ -309,7 +318,11 @@ class OcrProcessor {
     TextBox box,
   ) async {
     final orderedPoints = _prepareRecognitionBox(bitmap, box.points);
-    final crop = ImageUtils.cropTextRegion(bitmap, orderedPoints);
+    final crop = ImageUtils.cropTextRegion(
+      bitmap,
+      orderedPoints,
+      trimWhitespace: processingOptions.trimRecognitionWhitespace,
+    );
     final crops = [crop];
     final classificationMask = [false];
     final rotationStates = [false];
@@ -326,7 +339,10 @@ class OcrProcessor {
       }
     }
 
-    var recognitionResults = await _recognizer.recognize(crops);
+    var recognitionResults = await _recognizer.recognize(
+      crops,
+      options: processingOptions,
+    );
 
     if (useAngleClassification &&
         _classifier != null &&
@@ -341,7 +357,10 @@ class OcrProcessor {
           classificationMask,
           rotationStates,
         );
-        final refreshed = await _recognizer.recognize(crops);
+        final refreshed = await _recognizer.recognize(
+          crops,
+          options: processingOptions,
+        );
         if (refreshed.isNotEmpty &&
             refreshed[0].confidence > recognitionResults[0].confidence) {
           recognitionResults = refreshed;
@@ -443,22 +462,9 @@ class OcrProcessor {
   }
 
   List<Point> _prepareRecognitionBox(img.Image bitmap, List<Point> points) {
-    final orderedPoints = ImageUtils.orderPointsClockwise(points);
-    final width = ImageUtils.quadWidth(orderedPoints);
-    final height = ImageUtils.quadHeight(orderedPoints);
-    final aspectRatio = height <= 0 ? 0.0 : width / height;
-
-    if (aspectRatio >= longLineAspectRatioThreshold) {
-      return ImageUtils.expandBox(
-        orderedPoints,
-        horizontalPaddingRatio: longLineHorizontalPaddingRatio,
-        verticalPaddingRatio: longLineVerticalPaddingRatio,
-        imageWidth: bitmap.width,
-        imageHeight: bitmap.height,
-      );
-    }
-
-    return orderedPoints;
+    return ImageUtils.orderPointsClockwise(
+      ImageUtils.clipBoxToImageBounds(points, bitmap.width, bitmap.height),
+    );
   }
 
   Future<void> _dumpPreparedCrops(

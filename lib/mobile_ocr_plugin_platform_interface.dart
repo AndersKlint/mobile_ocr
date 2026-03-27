@@ -27,6 +27,10 @@ abstract class MobileOcrPlatform extends PlatformInterface {
     required String imagePath,
     bool includeAllConfidenceScores = false,
     String? debugDumpDir,
+    bool trimRecognitionWhitespace = false,
+    bool enhanceRecognitionCrops = false,
+    double recognitionContrastBoost = 0.08,
+    double recognitionBrightnessBoost = 0.02,
   }) {
     throw UnimplementedError('detectText() has not been implemented.');
   }

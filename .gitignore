@@ -95,3 +95,5 @@ example/ios/Runner/GeneratedPluginRegistrant.*
 example/android/.gradle/
 example/android/app/src/main/java/io/flutter/plugins/
 example/build/
+
+PaddleOCR

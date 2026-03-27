@@ -322,6 +322,7 @@ class _TextDetectorWidgetState extends State<TextDetectorWidget> {
       final blocks = await _ocr.detectText(
         imagePath: imagePath,
         debugDumpDir: widget.debugDumpDir,
+        enhanceRecognitionCrops: true,
       );
 
       if (mounted && widget.imagePath == requestedPath) {

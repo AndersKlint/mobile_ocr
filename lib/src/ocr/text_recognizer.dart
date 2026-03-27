@@ -19,7 +19,10 @@ class TextRecognizer {
 
   TextRecognizer(this.session, this.characterDict, {this.debugSession});
 
-  Future<List<RecognitionResult>> recognize(List<img.Image> images) async {
+  Future<List<RecognitionResult>> recognize(
+    List<img.Image> images, {
+    OcrProcessingOptions options = const OcrProcessingOptions(),
+  }) async {
     if (images.isEmpty) {
       return [];
     }
@@ -37,7 +40,11 @@ class TextRecognizer {
       final end = (start + batchSize).clamp(0, sortedIndices.length);
       final batchIndices = sortedIndices.sublist(start, end);
       final batchBitmaps = batchIndices.map((i) => images[i]).toList();
-      final batchResults = await processBatch(batchBitmaps);
+      final batchResults = await processBatch(
+        batchBitmaps,
+        batchStartIndex: start,
+        options: options,
+      );
 
       for (int idx = 0; idx < batchIndices.length; idx++) {
         orderedResults[batchIndices[idx]] = batchResults[idx];
@@ -48,8 +55,10 @@ class TextRecognizer {
   }
 
   Future<List<RecognitionResult>> processBatch(
-    List<img.Image> batchImages,
-  ) async {
+    List<img.Image> batchImages, {
+    int batchStartIndex = 0,
+    OcrProcessingOptions options = const OcrProcessingOptions(),
+  }) async {
     if (batchImages.isEmpty) return [];
 
     var maxWhRatio = imgWidth / imgHeight.toDouble();
@@ -72,6 +81,8 @@ class TextRecognizer {
         inputArray,
         index,
         targetWidth,
+        batchStartIndex: batchStartIndex + index,
+        options: options,
       );
     }
 
@@ -102,9 +113,18 @@ class TextRecognizer {
     img.Image bitmap,
     Float32List outputArray,
     int batchIndex,
-    int targetWidth,
-  ) async {
-    final enhancedBitmap = ImageUtils.enhanceRecognitionCrop(bitmap);
+    int targetWidth, {
+    int batchStartIndex = 0,
+    OcrProcessingOptions options = const OcrProcessingOptions(),
+  }) async {
+    final debugBatchIndex = batchStartIndex + batchIndex;
+    final preparedBitmap = options.enhanceRecognitionCrops
+        ? ImageUtils.enhanceRecognitionCrop(
+            bitmap,
+            contrastBoost: options.recognitionContrastBoost,
+            brightnessBoost: options.recognitionBrightnessBoost,
+          )
+        : bitmap;
     final aspectRatio = bitmap.width / bitmap.height;
     final resizedWidth = (imgHeight * aspectRatio).ceil().clamp(1, targetWidth);
 
@@ -112,7 +132,7 @@ class TextRecognizer {
     final std = [0.5, 0.5, 0.5];
 
     final tensor = await FastImageLoader.imageToTensor(
-      enhancedBitmap,
+      preparedBitmap,
       targetWidth: resizedWidth,
       targetHeight: imgHeight,
       mean: mean,
@@ -126,7 +146,7 @@ class TextRecognizer {
 
     if (debugSession != null) {
       final resizedPreview = img.copyResize(
-        enhancedBitmap,
+        preparedBitmap,
         width: resizedWidth,
         height: imgHeight,
         interpolation: img.Interpolation.linear,
@@ -137,20 +157,25 @@ class TextRecognizer {
         targetHeight: imgHeight,
       );
       await debugSession!.saveImage(
-        '03_recognizer/${batchIndex.toString().padLeft(3, '0')}_crop.png',
+        '03_recognizer/${debugBatchIndex.toString().padLeft(3, '0')}_crop.png',
         bitmap,
       );
       await debugSession!.saveImage(
-        '03_recognizer/${batchIndex.toString().padLeft(3, '0')}_model_input.png',
+        '03_recognizer/${debugBatchIndex.toString().padLeft(3, '0')}_model_input.png',
         modelInputPreview,
       );
       await debugSession!.writeJson(
-        '03_recognizer/${batchIndex.toString().padLeft(3, '0')}_meta.json',
+        '03_recognizer/${debugBatchIndex.toString().padLeft(3, '0')}_meta.json',
         {
           'originalWidth': bitmap.width,
           'originalHeight': bitmap.height,
-          'contrastBoost': 0.15,
-          'brightnessBoost': 0.05,
+          'enhanceRecognitionCrops': options.enhanceRecognitionCrops,
+          'contrastBoost': options.enhanceRecognitionCrops
+              ? options.recognitionContrastBoost
+              : 0.0,
+          'brightnessBoost': options.enhanceRecognitionCrops
+              ? options.recognitionBrightnessBoost
+              : 0.0,
           'resizedWidth': resizedWidth,
           'targetWidth': targetWidth,
           'targetHeight': imgHeight,

@@ -39,7 +39,7 @@ void main() {
         Point(170, 20),
         Point(175, 88),
         Point(25, 94),
-      ]);
+      ], trimWhitespace: true);
 
       expect(crop.width, closeTo(150, 2));
       expect(crop.height, inInclusiveRange(48, 68));
@@ -53,6 +53,47 @@ void main() {
       expect(topMiddle.r, lessThan(30));
       expect(topMiddle.g, lessThan(30));
       expect(topMiddle.b, lessThan(30));
+    });
+
+    test('cropTextRegion does not trim vertical whitespace by default', () {
+      final source = img.Image(width: 180, height: 100);
+      img.fill(source, color: img.ColorRgb8(255, 255, 255));
+
+      for (int y = 35; y < 65; y++) {
+        for (int x = 20; x < 160; x++) {
+          source.setPixelRgba(x, y, 0, 0, 0, 255);
+        }
+      }
+
+      final crop = ImageUtils.cropTextRegion(source, const [
+        Point(20, 0),
+        Point(160, 0),
+        Point(160, 99),
+        Point(20, 99),
+      ]);
+
+      expect(crop.height, 99);
+    });
+
+    test('cropTextRegion trims vertical whitespace when enabled', () {
+      final source = img.Image(width: 180, height: 100);
+      img.fill(source, color: img.ColorRgb8(255, 255, 255));
+
+      for (int y = 35; y < 65; y++) {
+        for (int x = 20; x < 160; x++) {
+          source.setPixelRgba(x, y, 0, 0, 0, 255);
+        }
+      }
+
+      final crop = ImageUtils.cropTextRegion(source, const [
+        Point(20, 0),
+        Point(160, 0),
+        Point(160, 99),
+        Point(20, 99),
+      ], trimWhitespace: true);
+
+      expect(crop.height, lessThan(45));
+      expect(crop.height, greaterThan(25));
     });
 
     test('expandBox grows long horizontal quads symmetrically', () {
@@ -173,9 +214,23 @@ void main() {
       expect(mid.b, greaterThan(170));
 
       final nearWhite = enhanced.getPixel(2, 0);
-      expect(nearWhite.r, 255);
-      expect(nearWhite.g, 255);
-      expect(nearWhite.b, 255);
+      expect(nearWhite.r, greaterThanOrEqualTo(250));
+      expect(nearWhite.g, greaterThanOrEqualTo(250));
+      expect(nearWhite.b, greaterThanOrEqualTo(250));
+    });
+
+    test('enhanceRecognitionCrop returns original image when disabled', () {
+      final source = img.Image(width: 2, height: 1);
+      source.setPixelRgba(0, 0, 10, 20, 30, 255);
+      source.setPixelRgba(1, 0, 40, 50, 60, 255);
+
+      final enhanced = ImageUtils.enhanceRecognitionCrop(
+        source,
+        contrastBoost: 0,
+        brightnessBoost: 0,
+      );
+
+      expect(identical(enhanced, source), isTrue);
     });
   });
 

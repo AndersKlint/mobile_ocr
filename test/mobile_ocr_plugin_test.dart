@@ -18,6 +18,10 @@ class MockMobileOcrPlatform
     required String imagePath,
     bool includeAllConfidenceScores = false,
     String? debugDumpDir,
+    bool trimRecognitionWhitespace = false,
+    bool enhanceRecognitionCrops = false,
+    double recognitionContrastBoost = 0.08,
+    double recognitionBrightnessBoost = 0.02,
   }) async {
     return [];
   }
@@ -131,11 +135,40 @@ void main() {
 
     await tempDir.delete(recursive: true);
   });
+
+  test('detectText forwards crop processing options', () async {
+    final tempDir = await Directory.systemTemp.createTemp('mobile_ocr_test');
+    final tempFile = File('${tempDir.path}/image.png');
+    await tempFile.writeAsBytes([0x00]);
+
+    final mobileOcr = MobileOcr();
+    final verifyingPlatform = _VerifyingMobileOcrPlatform();
+    MobileOcrPlatform.instance = verifyingPlatform;
+
+    await mobileOcr.detectText(
+      imagePath: tempFile.path,
+      trimRecognitionWhitespace: true,
+      enhanceRecognitionCrops: true,
+      recognitionContrastBoost: 0.04,
+      recognitionBrightnessBoost: 0.01,
+    );
+
+    expect(verifyingPlatform.lastTrimRecognitionWhitespace, isTrue);
+    expect(verifyingPlatform.lastEnhanceRecognitionCrops, isTrue);
+    expect(verifyingPlatform.lastRecognitionContrastBoost, 0.04);
+    expect(verifyingPlatform.lastRecognitionBrightnessBoost, 0.01);
+
+    await tempDir.delete(recursive: true);
+  });
 }
 
 class _VerifyingMobileOcrPlatform extends MockMobileOcrPlatform {
   String? lastImagePath;
   String? lastDebugDumpDir;
+  bool? lastTrimRecognitionWhitespace;
+  bool? lastEnhanceRecognitionCrops;
+  double? lastRecognitionContrastBoost;
+  double? lastRecognitionBrightnessBoost;
   bool response = false;
 
   @override
@@ -143,9 +176,17 @@ class _VerifyingMobileOcrPlatform extends MockMobileOcrPlatform {
     required String imagePath,
     bool includeAllConfidenceScores = false,
     String? debugDumpDir,
+    bool trimRecognitionWhitespace = false,
+    bool enhanceRecognitionCrops = false,
+    double recognitionContrastBoost = 0.08,
+    double recognitionBrightnessBoost = 0.02,
   }) async {
     lastImagePath = imagePath;
     lastDebugDumpDir = debugDumpDir;
+    lastTrimRecognitionWhitespace = trimRecognitionWhitespace;
+    lastEnhanceRecognitionCrops = enhanceRecognitionCrops;
+    lastRecognitionContrastBoost = recognitionContrastBoost;
+    lastRecognitionBrightnessBoost = recognitionBrightnessBoost;
     return [];
   }
 

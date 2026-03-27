@@ -99,6 +99,37 @@ class RecognitionResult {
   });
 }
 
+class OcrProcessingOptions {
+  final bool trimRecognitionWhitespace;
+  final bool enhanceRecognitionCrops;
+  final double recognitionContrastBoost;
+  final double recognitionBrightnessBoost;
+
+  const OcrProcessingOptions({
+    this.trimRecognitionWhitespace = false,
+    this.enhanceRecognitionCrops = false,
+    this.recognitionContrastBoost = 0.08,
+    this.recognitionBrightnessBoost = 0.02,
+  });
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is OcrProcessingOptions &&
+          trimRecognitionWhitespace == other.trimRecognitionWhitespace &&
+          enhanceRecognitionCrops == other.enhanceRecognitionCrops &&
+          recognitionContrastBoost == other.recognitionContrastBoost &&
+          recognitionBrightnessBoost == other.recognitionBrightnessBoost;
+
+  @override
+  int get hashCode => Object.hash(
+    trimRecognitionWhitespace,
+    enhanceRecognitionCrops,
+    recognitionContrastBoost,
+    recognitionBrightnessBoost,
+  );
+}
+
 class OcrResult {
   final List<TextBox> boxes;
   final List<String> texts;

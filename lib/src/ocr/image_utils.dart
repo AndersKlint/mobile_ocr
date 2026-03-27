@@ -10,8 +10,8 @@ class ImageUtils {
   static const int _verticalTrimMinBlankRows = 2;
   static const int _verticalTrimMinContrast = 24;
   static const int _verticalTrimMergeGapRows = 3;
-  static const double _recognitionContrastBoost = 0.15;
-  static const double _recognitionBrightnessBoost = 0.05;
+  static const double defaultRecognitionContrastBoost = 0.08;
+  static const double defaultRecognitionBrightnessBoost = 0.02;
 
   static List<Point> orderPointsClockwise(List<Point> points) {
     if (points.length != 4) {
@@ -59,7 +59,11 @@ class ImageUtils {
     return rect.whereType<Point>().toList(growable: false);
   }
 
-  static img.Image cropTextRegion(img.Image bitmap, List<Point> points) {
+  static img.Image cropTextRegion(
+    img.Image bitmap,
+    List<Point> points, {
+    bool trimWhitespace = false,
+  }) {
     if (points.length != 4) {
       throw ArgumentError('Expected 4 points for text region');
     }
@@ -69,11 +73,11 @@ class ImageUtils {
     );
     final cropWidth = math
         .max(distance(ordered[0], ordered[1]), distance(ordered[2], ordered[3]))
-        .toInt()
+        .ceil()
         .clamp(1, 10000);
     final cropHeight = math
         .max(distance(ordered[0], ordered[3]), distance(ordered[1], ordered[2]))
-        .toInt()
+        .ceil()
         .clamp(1, 10000);
 
     final srcPoints = <double>[
@@ -109,7 +113,7 @@ class ImageUtils {
         ? img.copyRotate(cropped, angle: 90)
         : cropped;
 
-    return trimVerticalWhitespace(normalized);
+    return trimWhitespace ? trimVerticalWhitespace(normalized) : normalized;
   }
 
   static img.Image trimVerticalWhitespace(img.Image image) {
@@ -226,10 +230,18 @@ class ImageUtils {
     );
   }
 
-  static img.Image enhanceRecognitionCrop(img.Image image) {
+  static img.Image enhanceRecognitionCrop(
+    img.Image image, {
+    double contrastBoost = defaultRecognitionContrastBoost,
+    double brightnessBoost = defaultRecognitionBrightnessBoost,
+  }) {
+    if (contrastBoost <= 0 && brightnessBoost <= 0) {
+      return image;
+    }
+
     final adjusted = img.Image(width: image.width, height: image.height);
-    final contrast = 1.0 + _recognitionContrastBoost;
-    final brightnessOffset = 255.0 * _recognitionBrightnessBoost;
+    final contrast = 1.0 + contrastBoost;
+    final brightnessOffset = 255.0 * brightnessBoost;
 
     for (int y = 0; y < image.height; y++) {
       for (int x = 0; x < image.width; x++) {

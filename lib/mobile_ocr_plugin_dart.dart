@@ -14,6 +14,7 @@ class DartMobileOcr extends MobileOcrPlatform {
   bool _isInitialized = false;
   bool _isInitializing = false;
   String? _processorDebugDumpDir;
+  OcrProcessingOptions _processingOptions = const OcrProcessingOptions();
 
   static const String _modelVersion = 'pp-ocrv5-202410';
   static const List<String> _modelFiles = [
@@ -79,17 +80,26 @@ class DartMobileOcr extends MobileOcrPlatform {
   }
 
   Future<void> _ensureInitialized() async {
-    await _ensureInitializedWithDebugDumpDir(null);
+    await _ensureInitializedWithOptions(
+      debugDumpDir: null,
+      processingOptions: _processingOptions,
+    );
   }
 
-  Future<void> _ensureInitializedWithDebugDumpDir(String? debugDumpDir) async {
+  Future<void> _ensureInitializedWithOptions({
+    required String? debugDumpDir,
+    required OcrProcessingOptions processingOptions,
+  }) async {
     if (_isInitialized &&
         _processor != null &&
-        _processorDebugDumpDir == debugDumpDir) {
+        _processorDebugDumpDir == debugDumpDir &&
+        _processingOptions == processingOptions) {
       return;
     }
 
-    if (_isInitialized && _processorDebugDumpDir != debugDumpDir) {
+    if (_isInitialized &&
+        (_processorDebugDumpDir != debugDumpDir ||
+            _processingOptions != processingOptions)) {
       _processor?.close();
       _processor = null;
       _isInitialized = false;
@@ -135,9 +145,11 @@ class DartMobileOcr extends MobileOcrPlatform {
         dictionaryPath: dictionaryPath,
         useAngleClassification: await File(classificationModel).exists(),
         debugDumpDir: debugDumpDir,
+        processingOptions: processingOptions,
       );
 
       _processorDebugDumpDir = debugDumpDir;
+      _processingOptions = processingOptions;
       _isInitialized = true;
     } finally {
       _isInitializing = false;
@@ -173,8 +185,20 @@ class DartMobileOcr extends MobileOcrPlatform {
     required String imagePath,
     bool includeAllConfidenceScores = false,
     String? debugDumpDir,
+    bool trimRecognitionWhitespace = false,
+    bool enhanceRecognitionCrops = false,
+    double recognitionContrastBoost = 0.08,
+    double recognitionBrightnessBoost = 0.02,
   }) async {
-    await _ensureInitializedWithDebugDumpDir(debugDumpDir);
+    await _ensureInitializedWithOptions(
+      debugDumpDir: debugDumpDir,
+      processingOptions: OcrProcessingOptions(
+        trimRecognitionWhitespace: trimRecognitionWhitespace,
+        enhanceRecognitionCrops: enhanceRecognitionCrops,
+        recognitionContrastBoost: recognitionContrastBoost,
+        recognitionBrightnessBoost: recognitionBrightnessBoost,
+      ),
+    );
 
     final file = File(imagePath);
     if (!await file.exists()) {

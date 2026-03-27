@@ -388,8 +388,9 @@ class _TextOverlayWidgetState extends State<TextOverlayWidget> {
 
     if (_selectionDragArmed && !_selectionDragInProgress) {
       final Offset? initial = _selectionPointerDownScenePoint;
-      final double delta =
-          initial == null ? 0.0 : (scenePoint - initial).distance;
+      final double delta = initial == null
+          ? 0.0
+          : (scenePoint - initial).distance;
       if (delta < _kDragStartSlop) {
         return;
       }
@@ -756,7 +757,6 @@ class _TextOverlayWidgetState extends State<TextOverlayWidget> {
       fontWeight: FontWeight.w500,
     );
 
-
     // Custom toolbar with explicit black background
     final Widget toolbar = Container(
       decoration: BoxDecoration(
@@ -781,9 +781,14 @@ class _TextOverlayWidgetState extends State<TextOverlayWidget> {
             TextButton(
               style: TextButton.styleFrom(
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
                 shape: const RoundedRectangleBorder(
-                  borderRadius: BorderRadius.horizontal(left: Radius.circular(8)),
+                  borderRadius: BorderRadius.horizontal(
+                    left: Radius.circular(8),
+                  ),
                 ),
               ),
               onPressed: _copySelectedText,
@@ -792,16 +797,18 @@ class _TextOverlayWidgetState extends State<TextOverlayWidget> {
                 style: buttonTextStyle,
               ),
             ),
-            Container(
-              width: 1,
-              color: Colors.white.withValues(alpha: 0.2),
-            ),
+            Container(width: 1, color: Colors.white.withValues(alpha: 0.2)),
             TextButton(
               style: TextButton.styleFrom(
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
                 shape: const RoundedRectangleBorder(
-                  borderRadius: BorderRadius.horizontal(right: Radius.circular(8)),
+                  borderRadius: BorderRadius.horizontal(
+                    right: Radius.circular(8),
+                  ),
                 ),
               ),
               onPressed: _selectAllText,
@@ -823,10 +830,10 @@ class _TextOverlayWidgetState extends State<TextOverlayWidget> {
       left: 0,
       right: 0,
       top: fitsAbove ? toolbarY : null,
-      bottom: fitsAbove ? null : MediaQuery.of(context).size.height - toolbarY - 44,
-      child: Center(
-        child: toolbar,
-      ),
+      bottom: fitsAbove
+          ? null
+          : MediaQuery.of(context).size.height - toolbarY - 44,
+      child: Center(child: toolbar),
     );
   }
 
