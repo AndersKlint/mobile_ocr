@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 import 'package:onnxruntime_v2/onnxruntime_v2.dart';
 import 'package:image/image.dart' as img;
+import 'fast_image_loader.dart';
 import 'fast_tensor_reader.dart';
 import 'ocr_debug_dumper.dart';
 
@@ -16,6 +17,8 @@ class TextClassifier {
   static const int imgWidth = 192;
   static const double clsThresh = 0.9;
   static const int batchSize = 6;
+  static const List<double> _mean = [0.5, 0.5, 0.5];
+  static const List<double> _std = [0.5, 0.5, 0.5];
 
   final OrtSession session;
   final OcrDebugSession? debugSession;
@@ -53,6 +56,7 @@ class TextClassifier {
 
     final batchSz = batchImages.length;
     final inputArray = Float32List(batchSz * 3 * imgHeight * imgWidth);
+    inputArray.fillRange(0, inputArray.length, 0);
 
     for (int index = 0; index < batchImages.length; index++) {
       await preprocessImage(batchImages[index], inputArray, index);
@@ -88,15 +92,30 @@ class TextClassifier {
   ) async {
     final aspectRatio = bitmap.width / bitmap.height;
     final resizedWidth = (imgHeight * aspectRatio).ceil().clamp(1, imgWidth);
+    final baseOffset = batchIndex * 3 * imgHeight * imgWidth;
 
-    final resized = img.copyResize(
+    final wroteTensor = await FastImageLoader.resizeToNormalizedBatchBuffer(
       bitmap,
-      width: resizedWidth,
-      height: imgHeight,
-      interpolation: img.Interpolation.linear,
+      resizedWidth: resizedWidth,
+      targetWidth: imgWidth,
+      targetHeight: imgHeight,
+      buffer: outputArray,
+      bufferOffset: baseOffset,
+      mean: _mean,
+      std: _std,
+      bgrOrder: true,
     );
+    if (!wroteTensor) {
+      return;
+    }
 
     if (debugSession != null) {
+      final resized = img.copyResize(
+        bitmap,
+        width: resizedWidth,
+        height: imgHeight,
+        interpolation: img.Interpolation.linear,
+      );
       final modelInputPreview = buildModelInputPreview(
         resizedImage: resized,
         targetWidth: imgWidth,
@@ -121,35 +140,6 @@ class TextClassifier {
           'aspectRatio': aspectRatio,
         },
       );
-    }
-
-    final baseOffset = batchIndex * 3 * imgHeight * imgWidth;
-    final channelStride = imgHeight * imgWidth;
-
-    for (int y = 0; y < imgHeight; y++) {
-      final rowOffset = y * imgWidth;
-
-      for (int x = 0; x < imgWidth; x++) {
-        final pixelIndex = rowOffset + x;
-
-        if (x < resizedWidth) {
-          final pixel = resized.getPixel(x, y);
-          final r = pixel.r.toDouble() / 255.0;
-          final g = pixel.g.toDouble() / 255.0;
-          final b = pixel.b.toDouble() / 255.0;
-
-          // BGR order to match Kotlin/Android
-          outputArray[baseOffset + pixelIndex] = (b - 0.5) / 0.5;
-          outputArray[baseOffset + channelStride + pixelIndex] =
-              (g - 0.5) / 0.5;
-          outputArray[baseOffset + 2 * channelStride + pixelIndex] =
-              (r - 0.5) / 0.5;
-        } else {
-          outputArray[baseOffset + pixelIndex] = 0;
-          outputArray[baseOffset + channelStride + pixelIndex] = 0;
-          outputArray[baseOffset + 2 * channelStride + pixelIndex] = 0;
-        }
-      }
     }
   }
 

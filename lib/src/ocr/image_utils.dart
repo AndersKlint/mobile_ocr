@@ -230,6 +230,7 @@ class ImageUtils {
     );
   }
 
+  // TODO: Slow, 700ms on textbook image.
   static img.Image enhanceRecognitionCrop(
     img.Image image, {
     double contrastBoost = defaultRecognitionContrastBoost,
@@ -439,6 +440,7 @@ class ImageUtils {
     );
   }
 
+  // TODO: Slow, 1.7s on textbook image.
   static img.Image perspectiveTransform(
     img.Image src,
     List<double> srcPoints,

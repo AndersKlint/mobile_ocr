@@ -81,18 +81,20 @@ class TextDetector {
     final resizedHeight = preprocessResult.$3;
     final resizedImage = preprocessResult.$4;
 
-    await debugSession?.saveImage('01_detector/input.png', resizedImage);
-    await debugSession?.writeJson('01_detector/meta.json', {
-      'originalWidth': originalWidth,
-      'originalHeight': originalHeight,
-      'resizedWidth': resizedWidth,
-      'resizedHeight': resizedHeight,
-      'limitSideLen': limitSideLen,
-      'limitType': limitType,
-      'thresh': thresh,
-      'boxThresh': boxThresh,
-      'unclipRatio': unclipRatio,
-    });
+    if (debugSession != null && resizedImage != null) {
+      await debugSession!.saveImage('01_detector/input.png', resizedImage);
+      await debugSession!.writeJson('01_detector/meta.json', {
+        'originalWidth': originalWidth,
+        'originalHeight': originalHeight,
+        'resizedWidth': resizedWidth,
+        'resizedHeight': resizedHeight,
+        'limitSideLen': limitSideLen,
+        'limitType': limitType,
+        'thresh': thresh,
+        'boxThresh': boxThresh,
+        'unclipRatio': unclipRatio,
+      });
+    }
 
     try {
       final inputs = {'x': inputTensor};
@@ -117,7 +119,7 @@ class TextDetector {
     }
   }
 
-  Future<(OrtValueTensor, int, int, img.Image)> preprocessImage(
+  Future<(OrtValueTensor, int, int, img.Image?)> preprocessImage(
     img.Image bitmap,
   ) async {
     final originalWidth = bitmap.width;
@@ -143,12 +145,14 @@ class TextDetector {
       throw StateError('Failed to preprocess image');
     }
 
-    final resizedImage = img.copyResize(
-      bitmap,
-      width: resizedWidth,
-      height: resizedHeight,
-      interpolation: img.Interpolation.linear,
-    );
+    final resizedImage = debugSession == null
+        ? null
+        : img.copyResize(
+            bitmap,
+            width: resizedWidth,
+            height: resizedHeight,
+            interpolation: img.Interpolation.linear,
+          );
 
     final shape = [1, 3, resizedHeight, resizedWidth];
     final inputTensor = OrtValueTensor.createTensorWithDataList(

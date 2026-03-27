@@ -266,6 +266,7 @@ class FastImageLoader {
     );
   }
 
+  // TODO: Slow, 1.0s on textbook image.
   static void _imageToRgba(img.Image source, Uint8List rgba) {
     final width = source.width;
     final height = source.height;
@@ -323,6 +324,80 @@ class FastImageLoader {
     return inputArray;
   }
 
+  static Future<bool> resizeToNormalizedBatchBuffer(
+    img.Image source, {
+    required int resizedWidth,
+    required int targetWidth,
+    required int targetHeight,
+    required Float32List buffer,
+    required int bufferOffset,
+    required List<double> mean,
+    required List<double> std,
+    bool bgrOrder = false,
+  }) async {
+    if (resizedWidth <= 0 || targetWidth <= 0 || targetHeight <= 0) {
+      return false;
+    }
+
+    final rgba = Uint8List(source.width * source.height * 4);
+    _imageToRgba(source, rgba);
+
+    final completer = Completer<ui.Image>();
+    ui.decodeImageFromPixels(
+      rgba,
+      source.width,
+      source.height,
+      ui.PixelFormat.rgba8888,
+      completer.complete,
+    );
+
+    final uiSourceImage = await completer.future;
+
+    final recorder = ui.PictureRecorder();
+    final canvas = ui.Canvas(recorder);
+    final paint = ui.Paint()..filterQuality = ui.FilterQuality.low;
+
+    final srcRect = ui.Rect.fromLTWH(
+      0,
+      0,
+      source.width.toDouble(),
+      source.height.toDouble(),
+    );
+    final dstRect = ui.Rect.fromLTWH(
+      0,
+      0,
+      resizedWidth.toDouble(),
+      targetHeight.toDouble(),
+    );
+
+    canvas.drawImageRect(uiSourceImage, srcRect, dstRect, paint);
+
+    final picture = recorder.endRecording();
+    final resizedUiImage = await picture.toImage(resizedWidth, targetHeight);
+
+    final byteData = await resizedUiImage.toByteData(
+      format: ui.ImageByteFormat.rawRgba,
+    );
+    if (byteData == null) {
+      return false;
+    }
+
+    final resizedRgba = byteData.buffer.asUint8List();
+    _rgbaToTensorBufferWithStride(
+      resizedRgba,
+      width: resizedWidth,
+      height: targetHeight,
+      rowStride: targetWidth,
+      mean: mean,
+      std: std,
+      bgrOrder: bgrOrder,
+      buffer: buffer,
+      bufferOffset: bufferOffset,
+    );
+
+    return true;
+  }
+
   static void _rgbaToTensorBuffer(
     Uint8List rgba,
     int width,
@@ -345,6 +420,44 @@ class FastImageLoader {
         final b = rgba[srcIdx + 2].toDouble() * scale;
 
         final pixelIndex = bufferOffset + rowOffset + x;
+
+        if (bgrOrder) {
+          buffer[pixelIndex] = (b - mean[0]) / std[0];
+          buffer[pixelIndex + channelStride] = (g - mean[1]) / std[1];
+          buffer[pixelIndex + 2 * channelStride] = (r - mean[2]) / std[2];
+        } else {
+          buffer[pixelIndex] = (r - mean[0]) / std[0];
+          buffer[pixelIndex + channelStride] = (g - mean[1]) / std[1];
+          buffer[pixelIndex + 2 * channelStride] = (b - mean[2]) / std[2];
+        }
+      }
+    }
+  }
+
+  static void _rgbaToTensorBufferWithStride(
+    Uint8List rgba, {
+    required int width,
+    required int height,
+    required int rowStride,
+    required List<double> mean,
+    required List<double> std,
+    required bool bgrOrder,
+    required Float32List buffer,
+    required int bufferOffset,
+  }) {
+    final channelStride = height * rowStride;
+    const scale = 1.0 / 255.0;
+
+    for (int y = 0; y < height; y++) {
+      final srcRowOffset = y * width;
+      final dstRowOffset = y * rowStride;
+      for (int x = 0; x < width; x++) {
+        final srcIdx = (srcRowOffset + x) * 4;
+        final r = rgba[srcIdx].toDouble() * scale;
+        final g = rgba[srcIdx + 1].toDouble() * scale;
+        final b = rgba[srcIdx + 2].toDouble() * scale;
+
+        final pixelIndex = bufferOffset + dstRowOffset + x;
 
         if (bgrOrder) {
           buffer[pixelIndex] = (b - mean[0]) / std[0];

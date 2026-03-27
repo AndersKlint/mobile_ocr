@@ -12,6 +12,8 @@ class TextRecognizer {
   static const int imgWidth = 320;
   static const int batchSize = 6;
   static const double minSpanRatio = 1e-3;
+  static const List<double> _mean = [0.5, 0.5, 0.5];
+  static const List<double> _std = [0.5, 0.5, 0.5];
 
   final OrtSession session;
   final List<String> characterDict;
@@ -30,14 +32,33 @@ class TextRecognizer {
     final widthList = images.map((img) => img.width / img.height).toList();
     final sortedIndices = List.generate(widthList.length, (i) => i)
       ..sort((a, b) => widthList[a].compareTo(widthList[b]));
+    final resizedWidths = sortedIndices
+        .map((index) => (imgHeight * widthList[index]).ceil().clamp(1, 10000))
+        .toList(growable: false);
 
     final orderedResults = List<RecognitionResult>.filled(
       images.length,
       RecognitionResult(text: '', confidence: 0, characterSpans: []),
     );
 
-    for (int start = 0; start < sortedIndices.length; start += batchSize) {
-      final end = (start + batchSize).clamp(0, sortedIndices.length);
+    int start = 0;
+    while (start < sortedIndices.length) {
+      var end = start + 1;
+      var widest = resizedWidths[start];
+
+      while (end < sortedIndices.length && end - start < batchSize) {
+        final candidateWidth = resizedWidths[end];
+        final nextWidest = candidateWidth > widest ? candidateWidth : widest;
+        final nextBatchSize = end - start + 1;
+        final exceedsPixelBudget =
+            nextBatchSize * nextWidest > batchSize * imgWidth;
+        if (exceedsPixelBudget) {
+          break;
+        }
+        widest = nextWidest;
+        end++;
+      }
+
       final batchIndices = sortedIndices.sublist(start, end);
       final batchBitmaps = batchIndices.map((i) => images[i]).toList();
       final batchResults = await processBatch(
@@ -49,6 +70,8 @@ class TextRecognizer {
       for (int idx = 0; idx < batchIndices.length; idx++) {
         orderedResults[batchIndices[idx]] = batchResults[idx];
       }
+
+      start = end;
     }
 
     return orderedResults;
@@ -73,6 +96,7 @@ class TextRecognizer {
 
     final batchSz = batchImages.length;
     final inputArray = Float32List(batchSz * 3 * imgHeight * targetWidth);
+    inputArray.fillRange(0, inputArray.length, 0);
 
     final contentWidths = List<int>.filled(batchSz, 0);
     for (int index = 0; index < batchImages.length; index++) {
@@ -127,20 +151,20 @@ class TextRecognizer {
         : bitmap;
     final aspectRatio = bitmap.width / bitmap.height;
     final resizedWidth = (imgHeight * aspectRatio).ceil().clamp(1, targetWidth);
+    final baseOffset = batchIndex * 3 * imgHeight * targetWidth;
 
-    final mean = [0.5, 0.5, 0.5];
-    final std = [0.5, 0.5, 0.5];
-
-    final tensor = await FastImageLoader.imageToTensor(
+    final wroteTensor = await FastImageLoader.resizeToNormalizedBatchBuffer(
       preparedBitmap,
-      targetWidth: resizedWidth,
+      resizedWidth: resizedWidth,
+      targetWidth: targetWidth,
       targetHeight: imgHeight,
-      mean: mean,
-      std: std,
+      buffer: outputArray,
+      bufferOffset: baseOffset,
+      mean: _mean,
+      std: _std,
       bgrOrder: true,
     );
-
-    if (tensor == null) {
+    if (!wroteTensor) {
       return 0;
     }
 
@@ -184,24 +208,6 @@ class TextRecognizer {
       );
     }
 
-    final baseOffset = batchIndex * 3 * imgHeight * targetWidth;
-    final channelStride = imgHeight * targetWidth;
-    final resizedChannelStride = imgHeight * resizedWidth;
-
-    for (int c = 0; c < 3; c++) {
-      for (int y = 0; y < imgHeight; y++) {
-        for (int x = 0; x < targetWidth; x++) {
-          final dstIdx = baseOffset + c * channelStride + y * targetWidth + x;
-          if (x < resizedWidth) {
-            final srcIdx = c * resizedChannelStride + y * resizedWidth + x;
-            outputArray[dstIdx] = tensor[srcIdx];
-          } else {
-            outputArray[dstIdx] = 0;
-          }
-        }
-      }
-    }
-
     return resizedWidth;
   }
 
@@ -229,7 +235,7 @@ class TextRecognizer {
       final batchOffset = b * seqStride;
 
       final charIndices = Int32List(seqLen);
-      final probs = Float64List(seqLen);
+      final probs = Float32List(seqLen);
 
       for (int t = 0; t < seqLen; t++) {
         final timeOffset = batchOffset + t * vocabStride;
@@ -265,7 +271,7 @@ class TextRecognizer {
 
   RecognitionResult ctcDecode(
     Int32List charIndices,
-    Float64List probs,
+    Float32List probs,
     double scale,
   ) {
     final seqLen = charIndices.length;
@@ -274,9 +280,10 @@ class TextRecognizer {
     }
 
     final safeScale = scale.isFinite && scale > 0 ? scale : 1.0;
-    final decodedChars = <String>[];
-    final decodedProbs = <double>[];
+    final textBuffer = StringBuffer();
     final spans = <CharacterSpan>[];
+    var confidenceSum = 0.0;
+    var confidenceCount = 0;
 
     final invSeqLen = 1.0 / seqLen;
     final dictLength = characterDict.length;
@@ -304,10 +311,11 @@ class TextRecognizer {
 
       if (currentIndex < dictLength) {
         final character = characterDict[currentIndex];
-        decodedChars.add(character);
+        textBuffer.write(character);
 
         final meanProb = probSum / count;
-        decodedProbs.add(meanProb);
+        confidenceSum += meanProb;
+        confidenceCount++;
 
         final minSpan = (invSeqLen * safeScale).clamp(minSpanRatio, 1.0);
 
@@ -341,9 +349,9 @@ class TextRecognizer {
       t = end;
     }
 
-    final text = decodedChars.join();
-    final confidence = decodedProbs.isNotEmpty
-        ? decodedProbs.reduce((a, b) => a + b) / decodedProbs.length
+    final text = textBuffer.toString();
+    final confidence = confidenceCount > 0
+        ? confidenceSum / confidenceCount
         : 0.0;
 
     return RecognitionResult(
