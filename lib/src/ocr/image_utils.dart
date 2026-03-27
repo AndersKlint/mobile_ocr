@@ -230,7 +230,6 @@ class ImageUtils {
     );
   }
 
-  // TODO: Slow, 700ms on textbook image.
   static img.Image enhanceRecognitionCrop(
     img.Image image, {
     double contrastBoost = defaultRecognitionContrastBoost,
@@ -238,6 +237,40 @@ class ImageUtils {
   }) {
     if (contrastBoost <= 0 && brightnessBoost <= 0) {
       return image;
+    }
+
+    final sourceBytes = _tryGetUint8Bytes(image);
+    final sourceChannels = image.numChannels;
+    if (sourceBytes != null && (sourceChannels == 3 || sourceChannels == 4)) {
+      final adjustedBytes = Uint8List(
+        image.width * image.height * sourceChannels,
+      );
+      final lut = _buildToneAdjustmentLut(
+        1.0 + contrastBoost,
+        255.0 * brightnessBoost,
+      );
+
+      if (sourceChannels == 4) {
+        for (int i = 0; i < sourceBytes.length; i += 4) {
+          adjustedBytes[i] = lut[sourceBytes[i]];
+          adjustedBytes[i + 1] = lut[sourceBytes[i + 1]];
+          adjustedBytes[i + 2] = lut[sourceBytes[i + 2]];
+          adjustedBytes[i + 3] = sourceBytes[i + 3];
+        }
+      } else {
+        for (int i = 0; i < sourceBytes.length; i += 3) {
+          adjustedBytes[i] = lut[sourceBytes[i]];
+          adjustedBytes[i + 1] = lut[sourceBytes[i + 1]];
+          adjustedBytes[i + 2] = lut[sourceBytes[i + 2]];
+        }
+      }
+
+      return _imageFromUint8Bytes(
+        adjustedBytes,
+        width: image.width,
+        height: image.height,
+        numChannels: sourceChannels,
+      );
     }
 
     final adjusted = img.Image(width: image.width, height: image.height);
@@ -440,7 +473,6 @@ class ImageUtils {
     );
   }
 
-  // TODO: Slow, 1.7s on textbook image.
   static img.Image perspectiveTransform(
     img.Image src,
     List<double> srcPoints,
@@ -449,6 +481,95 @@ class ImageUtils {
     int dstHeight,
   ) {
     final matrix = computePerspectiveTransform(dstPoints, srcPoints);
+
+    final sourceBytes = _tryGetUint8Bytes(src);
+    final sourceChannels = src.numChannels;
+    if (sourceBytes != null && (sourceChannels == 3 || sourceChannels == 4)) {
+      final dstBytes = Uint8List(dstWidth * dstHeight * sourceChannels);
+      final maxX = src.width - 1.0;
+      final maxY = src.height - 1.0;
+      final srcRowStride = src.rowStride;
+
+      final m0 = matrix[0];
+      final m1 = matrix[1];
+      final m2 = matrix[2];
+      final m3 = matrix[3];
+      final m4 = matrix[4];
+      final m5 = matrix[5];
+      final m6 = matrix[6];
+      final m7 = matrix[7];
+
+      var dstOffset = 0;
+      for (int y = 0; y < dstHeight; y++) {
+        final yAsDouble = y.toDouble();
+        var numeratorX = m1 * yAsDouble + m2;
+        var numeratorY = m4 * yAsDouble + m5;
+        var denominator = m7 * yAsDouble + 1.0;
+
+        for (int x = 0; x < dstWidth; x++) {
+          final srcX = (numeratorX / denominator).clamp(0.0, maxX);
+          final srcY = (numeratorY / denominator).clamp(0.0, maxY);
+
+          final x0 = srcX.floor();
+          final y0 = srcY.floor();
+          final x1 = math.min(x0 + 1, src.width - 1);
+          final y1 = math.min(y0 + 1, src.height - 1);
+
+          final fx = srcX - x0;
+          final fy = srcY - y0;
+          final w00 = (1 - fx) * (1 - fy);
+          final w10 = fx * (1 - fy);
+          final w01 = (1 - fx) * fy;
+          final w11 = fx * fy;
+
+          final base00 = y0 * srcRowStride + x0 * sourceChannels;
+          final base01 = y1 * srcRowStride + x0 * sourceChannels;
+          final base10 = y0 * srcRowStride + x1 * sourceChannels;
+          final base11 = y1 * srcRowStride + x1 * sourceChannels;
+
+          dstBytes[dstOffset] =
+              (sourceBytes[base00] * w00 +
+                      sourceBytes[base10] * w10 +
+                      sourceBytes[base01] * w01 +
+                      sourceBytes[base11] * w11)
+                  .round();
+          dstBytes[dstOffset + 1] =
+              (sourceBytes[base00 + 1] * w00 +
+                      sourceBytes[base10 + 1] * w10 +
+                      sourceBytes[base01 + 1] * w01 +
+                      sourceBytes[base11 + 1] * w11)
+                  .round();
+          dstBytes[dstOffset + 2] =
+              (sourceBytes[base00 + 2] * w00 +
+                      sourceBytes[base10 + 2] * w10 +
+                      sourceBytes[base01 + 2] * w01 +
+                      sourceBytes[base11 + 2] * w11)
+                  .round();
+
+          if (sourceChannels == 4) {
+            dstBytes[dstOffset + 3] =
+                (sourceBytes[base00 + 3] * w00 +
+                        sourceBytes[base10 + 3] * w10 +
+                        sourceBytes[base01 + 3] * w01 +
+                        sourceBytes[base11 + 3] * w11)
+                    .round();
+          }
+
+          dstOffset += sourceChannels;
+          numeratorX += m0;
+          numeratorY += m3;
+          denominator += m6;
+        }
+      }
+
+      return _imageFromUint8Bytes(
+        dstBytes,
+        width: dstWidth,
+        height: dstHeight,
+        numChannels: sourceChannels,
+      );
+    }
+
     final result = img.Image(width: dstWidth, height: dstHeight);
 
     for (int y = 0; y < dstHeight; y++) {
@@ -602,6 +723,48 @@ class ImageUtils {
       return null;
     }
     return Point(vector.x / length, vector.y / length);
+  }
+
+  static Uint8List? _tryGetUint8Bytes(img.Image image) {
+    final imageData = image.data;
+    if (imageData is! img.ImageDataUint8 || image.hasPalette) {
+      return null;
+    }
+    final channels = image.numChannels;
+    if (channels != 3 && channels != 4) {
+      return null;
+    }
+    return image.toUint8List();
+  }
+
+  static img.Image _imageFromUint8Bytes(
+    Uint8List bytes, {
+    required int width,
+    required int height,
+    required int numChannels,
+  }) {
+    return img.Image.fromBytes(
+      width: width,
+      height: height,
+      bytes: bytes.buffer,
+      numChannels: numChannels,
+      order: numChannels == 4 ? img.ChannelOrder.rgba : img.ChannelOrder.rgb,
+    );
+  }
+
+  static Uint8List _buildToneAdjustmentLut(
+    double contrast,
+    double brightnessOffset,
+  ) {
+    final lut = Uint8List(256);
+    for (int value = 0; value < 256; value++) {
+      lut[value] = _applyRecognitionToneAdjustment(
+        value,
+        contrast,
+        brightnessOffset,
+      );
+    }
+    return lut;
   }
 
   static Float32List imageToTensor(

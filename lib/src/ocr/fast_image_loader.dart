@@ -266,8 +266,43 @@ class FastImageLoader {
     );
   }
 
-  // TODO: Slow, 1.0s on textbook image.
   static void _imageToRgba(img.Image source, Uint8List rgba) {
+    final sourceBytes = _tryGetUint8Bytes(source);
+    final sourceChannels = source.numChannels;
+    if (sourceBytes != null && (sourceChannels == 3 || sourceChannels == 4)) {
+      final width = source.width;
+      final height = source.height;
+      final sourceRowStride = source.rowStride;
+
+      if (sourceChannels == 4) {
+        final rowLength = width * 4;
+        var dstOffset = 0;
+        for (int y = 0; y < height; y++) {
+          final srcOffset = y * sourceRowStride;
+          rgba.setRange(
+            dstOffset,
+            dstOffset + rowLength,
+            sourceBytes,
+            srcOffset,
+          );
+          dstOffset += rowLength;
+        }
+        return;
+      }
+
+      var dstOffset = 0;
+      for (int y = 0; y < height; y++) {
+        var srcOffset = y * sourceRowStride;
+        for (int x = 0; x < width; x++) {
+          rgba[dstOffset++] = sourceBytes[srcOffset++];
+          rgba[dstOffset++] = sourceBytes[srcOffset++];
+          rgba[dstOffset++] = sourceBytes[srcOffset++];
+          rgba[dstOffset++] = 255;
+        }
+      }
+      return;
+    }
+
     final width = source.width;
     final height = source.height;
     for (int y = 0; y < height; y++) {
@@ -284,6 +319,42 @@ class FastImageLoader {
   }
 
   static void _fillImageFromRgba(img.Image image, Uint8List rgba) {
+    final imageBytes = _tryGetUint8Bytes(image);
+    final imageChannels = image.numChannels;
+    if (imageBytes != null && (imageChannels == 3 || imageChannels == 4)) {
+      final width = image.width;
+      final height = image.height;
+      final imageRowStride = image.rowStride;
+
+      if (imageChannels == 4) {
+        final rowLength = width * 4;
+        var srcOffset = 0;
+        for (int y = 0; y < height; y++) {
+          final dstOffset = y * imageRowStride;
+          imageBytes.setRange(
+            dstOffset,
+            dstOffset + rowLength,
+            rgba,
+            srcOffset,
+          );
+          srcOffset += rowLength;
+        }
+        return;
+      }
+
+      var srcOffset = 0;
+      for (int y = 0; y < height; y++) {
+        var dstOffset = y * imageRowStride;
+        for (int x = 0; x < width; x++) {
+          imageBytes[dstOffset++] = rgba[srcOffset++];
+          imageBytes[dstOffset++] = rgba[srcOffset++];
+          imageBytes[dstOffset++] = rgba[srcOffset++];
+          srcOffset++;
+        }
+      }
+      return;
+    }
+
     final width = image.width;
     final height = image.height;
     for (int y = 0; y < height; y++) {
@@ -300,6 +371,18 @@ class FastImageLoader {
         );
       }
     }
+  }
+
+  static Uint8List? _tryGetUint8Bytes(img.Image image) {
+    final imageData = image.data;
+    if (imageData is! img.ImageDataUint8 || image.hasPalette) {
+      return null;
+    }
+    final channels = image.numChannels;
+    if (channels != 3 && channels != 4) {
+      return null;
+    }
+    return image.toUint8List();
   }
 
   static Float32List _rgbaToTensor(
