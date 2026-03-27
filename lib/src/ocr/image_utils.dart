@@ -4,6 +4,13 @@ import 'package:image/image.dart' as img;
 import 'types.dart';
 
 class ImageUtils {
+  static const double _verticalTrimMinForegroundRatio = 0.01;
+  static const int _verticalTrimMinForegroundPixels = 2;
+  static const int _verticalTrimPaddingRows = 2;
+  static const int _verticalTrimMinBlankRows = 2;
+  static const int _verticalTrimMinContrast = 24;
+  static const int _verticalTrimMergeGapRows = 3;
+
   static List<Point> orderPointsClockwise(List<Point> points) {
     if (points.length != 4) {
       return points;
@@ -96,11 +103,198 @@ class ImageUtils {
       cropHeight,
     );
 
-    if (cropHeight / cropWidth >= 1.5) {
-      return img.copyRotate(cropped, angle: 90);
+    final normalized = cropHeight / cropWidth >= 1.5
+        ? img.copyRotate(cropped, angle: 90)
+        : cropped;
+
+    return trimVerticalWhitespace(normalized);
+  }
+
+  static img.Image trimVerticalWhitespace(img.Image image) {
+    if (image.height <= 4 || image.width <= 0) {
+      return image;
     }
 
-    return cropped;
+    final totalPixels = image.width * image.height;
+    final luminanceValues = Uint8List(totalPixels);
+    final histogram = List<int>.filled(256, 0);
+
+    var minLuminance = 255;
+    var maxLuminance = 0;
+    var offset = 0;
+
+    for (int y = 0; y < image.height; y++) {
+      for (int x = 0; x < image.width; x++) {
+        final pixel = image.getPixel(x, y);
+        final luminance = _pixelLuminance(pixel.r, pixel.g, pixel.b);
+        luminanceValues[offset++] = luminance;
+        histogram[luminance]++;
+
+        if (luminance < minLuminance) minLuminance = luminance;
+        if (luminance > maxLuminance) maxLuminance = luminance;
+      }
+    }
+
+    if (maxLuminance - minLuminance < _verticalTrimMinContrast) {
+      return image;
+    }
+
+    final threshold = _computeOtsuThreshold(histogram, totalPixels);
+    final darkPixels = histogram
+        .sublist(0, threshold + 1)
+        .fold<int>(0, (sum, count) => sum + count);
+    final lightPixels = totalPixels - darkPixels;
+    final foregroundIsDark = darkPixels <= lightPixels;
+
+    final minForegroundPixels = math.max(
+      _verticalTrimMinForegroundPixels,
+      (image.width * _verticalTrimMinForegroundRatio).ceil(),
+    );
+    final rowForegroundCounts = List<int>.filled(image.height, 0);
+
+    offset = 0;
+    for (int y = 0; y < image.height; y++) {
+      var count = 0;
+      for (int x = 0; x < image.width; x++) {
+        final luminance = luminanceValues[offset++];
+        final isForeground = foregroundIsDark
+            ? luminance <= threshold
+            : luminance > threshold;
+        if (isForeground) {
+          count++;
+        }
+      }
+      rowForegroundCounts[y] = count;
+    }
+
+    final activeRows = List<bool>.filled(image.height, false);
+    for (int y = 0; y < image.height; y++) {
+      var localMax = rowForegroundCounts[y];
+      if (y > 0 && rowForegroundCounts[y - 1] > localMax) {
+        localMax = rowForegroundCounts[y - 1];
+      }
+      if (y + 1 < image.height && rowForegroundCounts[y + 1] > localMax) {
+        localMax = rowForegroundCounts[y + 1];
+      }
+
+      if (localMax >= minForegroundPixels) {
+        activeRows[y] = true;
+      }
+    }
+
+    final bands = _buildVerticalBands(activeRows, rowForegroundCounts);
+    if (bands.isEmpty) {
+      return image;
+    }
+
+    final primaryBand = bands.reduce((best, current) {
+      if (current.inkSum != best.inkSum) {
+        return current.inkSum > best.inkSum ? current : best;
+      }
+      if (current.activeRows != best.activeRows) {
+        return current.activeRows > best.activeRows ? current : best;
+      }
+      return current.height > best.height ? current : best;
+    });
+
+    final top = math.max(0, primaryBand.start - _verticalTrimPaddingRows);
+    final bottom = math.min(
+      image.height - 1,
+      primaryBand.end + _verticalTrimPaddingRows,
+    );
+    final trimmedTopRows = top;
+    final trimmedBottomRows = image.height - 1 - bottom;
+
+    if (trimmedTopRows < _verticalTrimMinBlankRows &&
+        trimmedBottomRows < _verticalTrimMinBlankRows) {
+      return image;
+    }
+
+    final trimmedHeight = bottom - top + 1;
+    if (trimmedHeight <= 0 || trimmedHeight >= image.height) {
+      return image;
+    }
+
+    return img.copyCrop(
+      image,
+      x: 0,
+      y: top,
+      width: image.width,
+      height: trimmedHeight,
+    );
+  }
+
+  static int _pixelLuminance(num r, num g, num b) {
+    return ((299 * r) + (587 * g) + (114 * b)).round() ~/ 1000;
+  }
+
+  static List<_VerticalBand> _buildVerticalBands(
+    List<bool> activeRows,
+    List<int> rowForegroundCounts,
+  ) {
+    final bands = <_VerticalBand>[];
+    _VerticalBand? current;
+
+    for (int y = 0; y < activeRows.length; y++) {
+      if (!activeRows[y]) {
+        continue;
+      }
+
+      if (current == null || y - current.end - 1 > _verticalTrimMergeGapRows) {
+        current = _VerticalBand(
+          start: y,
+          end: y,
+          inkSum: rowForegroundCounts[y],
+          activeRows: 1,
+        );
+        bands.add(current);
+      } else {
+        current.end = y;
+        current.inkSum += rowForegroundCounts[y];
+        current.activeRows++;
+      }
+    }
+
+    return bands;
+  }
+
+  static int _computeOtsuThreshold(List<int> histogram, int totalPixels) {
+    var sum = 0.0;
+    for (int i = 0; i < histogram.length; i++) {
+      sum += i * histogram[i];
+    }
+
+    var sumBackground = 0.0;
+    var weightBackground = 0;
+    var maxVariance = -1.0;
+    var threshold = 0;
+
+    for (int i = 0; i < histogram.length; i++) {
+      weightBackground += histogram[i];
+      if (weightBackground == 0) {
+        continue;
+      }
+
+      final weightForeground = totalPixels - weightBackground;
+      if (weightForeground == 0) {
+        break;
+      }
+
+      sumBackground += i * histogram[i];
+      final meanBackground = sumBackground / weightBackground;
+      final meanForeground = (sum - sumBackground) / weightForeground;
+      final variance =
+          weightBackground *
+          weightForeground *
+          math.pow(meanBackground - meanForeground, 2);
+
+      if (variance > maxVariance) {
+        maxVariance = variance.toDouble();
+        threshold = i;
+      }
+    }
+
+    return threshold;
   }
 
   static double quadWidth(List<Point> points) {
@@ -405,4 +599,20 @@ class ImageUtils {
 
     return tensor;
   }
+}
+
+class _VerticalBand {
+  _VerticalBand({
+    required this.start,
+    required this.end,
+    required this.inkSum,
+    required this.activeRows,
+  });
+
+  int start;
+  int end;
+  int inkSum;
+  int activeRows;
+
+  int get height => end - start + 1;
 }

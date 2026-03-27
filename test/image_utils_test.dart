@@ -42,17 +42,17 @@ void main() {
       ]);
 
       expect(crop.width, closeTo(150, 2));
-      expect(crop.height, closeTo(68, 2));
+      expect(crop.height, inInclusiveRange(48, 68));
 
       final center = crop.getPixel(crop.width ~/ 2, crop.height ~/ 2);
       expect(center.r, lessThan(30));
       expect(center.g, lessThan(30));
       expect(center.b, lessThan(30));
 
-      final topLeft = crop.getPixel(0, 0);
-      expect(topLeft.r, lessThan(30));
-      expect(topLeft.g, lessThan(30));
-      expect(topLeft.b, lessThan(30));
+      final topMiddle = crop.getPixel(crop.width ~/ 2, 1);
+      expect(topMiddle.r, lessThan(30));
+      expect(topMiddle.g, lessThan(30));
+      expect(topMiddle.b, lessThan(30));
     });
 
     test('expandBox grows long horizontal quads symmetrically', () {
@@ -76,6 +76,83 @@ void main() {
       expect(expanded[0].y, closeTo(150, 0.01));
       expect(expanded[2].y, closeTo(350, 0.01));
     });
+
+    test('trimVerticalWhitespace removes large top and bottom margins', () {
+      final source = img.Image(width: 180, height: 100);
+      img.fill(source, color: img.ColorRgb8(255, 255, 255));
+
+      for (int y = 35; y < 65; y++) {
+        for (int x = 20; x < 160; x++) {
+          source.setPixelRgba(x, y, 0, 0, 0, 255);
+        }
+      }
+
+      final trimmed = ImageUtils.trimVerticalWhitespace(source);
+
+      expect(trimmed.width, 180);
+      expect(trimmed.height, lessThan(45));
+      expect(trimmed.height, greaterThan(25));
+
+      final center = trimmed.getPixel(trimmed.width ~/ 2, trimmed.height ~/ 2);
+      expect(center.r, lessThan(30));
+      expect(center.g, lessThan(30));
+      expect(center.b, lessThan(30));
+    });
+
+    test('trimVerticalWhitespace supports light text on dark background', () {
+      final source = img.Image(width: 180, height: 100);
+      img.fill(source, color: img.ColorRgb8(0, 0, 0));
+
+      for (int y = 38; y < 62; y++) {
+        for (int x = 20; x < 160; x++) {
+          source.setPixelRgba(x, y, 255, 255, 255, 255);
+        }
+      }
+
+      final trimmed = ImageUtils.trimVerticalWhitespace(source);
+
+      expect(trimmed.width, 180);
+      expect(trimmed.height, lessThan(40));
+      expect(trimmed.height, greaterThan(20));
+
+      final center = trimmed.getPixel(trimmed.width ~/ 2, trimmed.height ~/ 2);
+      expect(center.r, greaterThan(225));
+      expect(center.g, greaterThan(225));
+      expect(center.b, greaterThan(225));
+    });
+
+    test(
+      'trimVerticalWhitespace ignores weak detached band below main line',
+      () {
+        final source = img.Image(width: 240, height: 140);
+        img.fill(source, color: img.ColorRgb8(255, 255, 255));
+
+        for (int y = 24; y < 84; y++) {
+          for (int x = 20; x < 220; x++) {
+            source.setPixelRgba(x, y, 0, 0, 0, 255);
+          }
+        }
+
+        for (int y = 118; y < 126; y++) {
+          for (int x = 70; x < 170; x++) {
+            source.setPixelRgba(x, y, 0, 0, 0, 255);
+          }
+        }
+
+        final trimmed = ImageUtils.trimVerticalWhitespace(source);
+
+        expect(trimmed.height, lessThan(80));
+        expect(trimmed.height, greaterThan(55));
+
+        final bottomCenter = trimmed.getPixel(
+          trimmed.width ~/ 2,
+          trimmed.height - 2,
+        );
+        expect(bottomCenter.r, greaterThan(225));
+        expect(bottomCenter.g, greaterThan(225));
+        expect(bottomCenter.b, greaterThan(225));
+      },
+    );
   });
 
   group('TextDetector resize', () {
