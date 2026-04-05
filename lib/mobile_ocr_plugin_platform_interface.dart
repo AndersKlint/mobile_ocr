@@ -1,4 +1,5 @@
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
+import 'package:image/image.dart' as img;
 
 import 'mobile_ocr_plugin_dart.dart';
 
@@ -35,8 +36,24 @@ abstract class MobileOcrPlatform extends PlatformInterface {
     throw UnimplementedError('detectText() has not been implemented.');
   }
 
+  Future<List<Map<dynamic, dynamic>>> detectTextFromImage({
+    required img.Image image,
+    bool includeAllConfidenceScores = false,
+    String? debugDumpDir,
+    bool trimRecognitionWhitespace = false,
+    bool enhanceRecognitionCrops = false,
+    double recognitionContrastBoost = 0.08,
+    double recognitionBrightnessBoost = 0.02,
+  }) {
+    throw UnimplementedError('detectTextFromImage() has not been implemented.');
+  }
+
   Future<bool> hasText({required String imagePath}) {
     throw UnimplementedError('hasText() has not been implemented.');
+  }
+
+  Future<bool> hasTextInImage({required img.Image image}) {
+    throw UnimplementedError('hasTextInImage() has not been implemented.');
   }
 
   Future<Map<dynamic, dynamic>> prepareModels() {

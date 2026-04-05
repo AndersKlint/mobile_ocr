@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:image/image.dart' as img;
 import 'package:mobile_ocr/models/text_block.dart';
 
 import 'mobile_ocr_plugin_platform_interface.dart';
@@ -65,6 +66,28 @@ class MobileOcr {
     return results.map(TextBlock.fromMap).toList(growable: false);
   }
 
+  /// Detect text from a decoded in-memory image.
+  Future<List<TextBlock>> detectTextFromImage({
+    required img.Image image,
+    bool includeAllConfidenceScores = false,
+    String? debugDumpDir,
+    bool trimRecognitionWhitespace = false,
+    bool enhanceRecognitionCrops = false,
+    double recognitionContrastBoost = 0.08,
+    double recognitionBrightnessBoost = 0.02,
+  }) async {
+    final results = await MobileOcrPlatform.instance.detectTextFromImage(
+      image: image,
+      includeAllConfidenceScores: includeAllConfidenceScores,
+      debugDumpDir: debugDumpDir,
+      trimRecognitionWhitespace: trimRecognitionWhitespace,
+      enhanceRecognitionCrops: enhanceRecognitionCrops,
+      recognitionContrastBoost: recognitionContrastBoost,
+      recognitionBrightnessBoost: recognitionBrightnessBoost,
+    );
+    return results.map(TextBlock.fromMap).toList(growable: false);
+  }
+
   /// Quickly determine whether the image contains high-confidence text.
   ///
   /// Returns `true` if at least one detected text block has confidence >= 0.9.
@@ -76,6 +99,11 @@ class MobileOcr {
     }
 
     return MobileOcrPlatform.instance.hasText(imagePath: file.path);
+  }
+
+  /// Quickly determine whether an in-memory image contains high-confidence text.
+  Future<bool> hasTextInImage({required img.Image image}) {
+    return MobileOcrPlatform.instance.hasTextInImage(image: image);
   }
 }
 

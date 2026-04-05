@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:image/image.dart' as img;
 import 'package:mobile_ocr/mobile_ocr_plugin.dart';
 import 'package:mobile_ocr/mobile_ocr_plugin_platform_interface.dart';
 import 'package:mobile_ocr/mobile_ocr_plugin_dart.dart';
@@ -27,7 +28,25 @@ class MockMobileOcrPlatform
   }
 
   @override
+  Future<List<Map<dynamic, dynamic>>> detectTextFromImage({
+    required img.Image image,
+    bool includeAllConfidenceScores = false,
+    String? debugDumpDir,
+    bool trimRecognitionWhitespace = false,
+    bool enhanceRecognitionCrops = false,
+    double recognitionContrastBoost = 0.08,
+    double recognitionBrightnessBoost = 0.02,
+  }) async {
+    return [];
+  }
+
+  @override
   Future<bool> hasText({required String imagePath}) async {
+    return false;
+  }
+
+  @override
+  Future<bool> hasTextInImage({required img.Image image}) async {
     return false;
   }
 

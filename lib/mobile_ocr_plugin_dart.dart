@@ -219,6 +219,34 @@ class DartMobileOcr extends MobileOcrPlatform {
   }
 
   @override
+  Future<List<Map<dynamic, dynamic>>> detectTextFromImage({
+    required img.Image image,
+    bool includeAllConfidenceScores = false,
+    String? debugDumpDir,
+    bool trimRecognitionWhitespace = false,
+    bool enhanceRecognitionCrops = false,
+    double recognitionContrastBoost = 0.08,
+    double recognitionBrightnessBoost = 0.02,
+  }) async {
+    await _ensureInitializedWithOptions(
+      debugDumpDir: debugDumpDir,
+      processingOptions: OcrProcessingOptions(
+        trimRecognitionWhitespace: trimRecognitionWhitespace,
+        enhanceRecognitionCrops: enhanceRecognitionCrops,
+        recognitionContrastBoost: recognitionContrastBoost,
+        recognitionBrightnessBoost: recognitionBrightnessBoost,
+      ),
+    );
+
+    final result = await _processor!.processImage(
+      image,
+      includeAllConfidenceScores: includeAllConfidenceScores,
+    );
+
+    return _convertResultToMap(result);
+  }
+
+  @override
   Future<bool> hasText({required String imagePath}) async {
     await _ensureInitialized();
 
@@ -231,6 +259,14 @@ class DartMobileOcr extends MobileOcrPlatform {
     if (image == null) {
       throw ArgumentError('Could not decode image: $imagePath');
     }
+
+    final result = await _processor!.hasHighConfidenceText(image);
+    return result.hasText;
+  }
+
+  @override
+  Future<bool> hasTextInImage({required img.Image image}) async {
+    await _ensureInitialized();
 
     final result = await _processor!.hasHighConfidenceText(image);
     return result.hasText;
