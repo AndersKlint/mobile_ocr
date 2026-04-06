@@ -112,7 +112,13 @@ class OcrProcessor {
     final detectionResult = await _detector.detect(bitmap);
 
     if (detectionResult.isEmpty) {
-      return OcrResult(boxes: [], texts: [], scores: [], characters: []);
+      return OcrResult(
+        boxes: [],
+        texts: [],
+        scores: [],
+        characters: [],
+        isRotated180: [],
+      );
     }
 
     final croppedImages = <img.Image>[];
@@ -213,6 +219,7 @@ class OcrProcessor {
     final filteredTexts = <String>[];
     final filteredScores = <double>[];
     final filteredCharacters = <List<CharacterBox>>[];
+    final filteredRotated180 = <bool>[];
 
     for (int i = 0; i < recognitionResults.length; i++) {
       final recognition = recognitionResults[i];
@@ -221,6 +228,7 @@ class OcrProcessor {
         filteredTexts.add(recognition.text);
         filteredScores.add(recognition.confidence);
         filteredCharacters.add(characterBoxesPerDetection[i]);
+        filteredRotated180.add(rotationStates[i]);
       }
     }
 
@@ -232,6 +240,7 @@ class OcrProcessor {
         return {
           'text': filteredTexts[index],
           'confidence': filteredScores[index],
+          'isRotated180': filteredRotated180[index],
           'points': filteredResults[index].points
               .map((point) => {'x': point.x, 'y': point.y})
               .toList(growable: false),
@@ -244,6 +253,7 @@ class OcrProcessor {
       texts: filteredTexts,
       scores: filteredScores,
       characters: filteredCharacters,
+      isRotated180: filteredRotated180,
     );
   }
 

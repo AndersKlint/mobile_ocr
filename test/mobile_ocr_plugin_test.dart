@@ -110,6 +110,35 @@ void main() {
     expect(block.boundingBox.bottom, 7.0);
   });
 
+  test('TextBlock reads isRotated180 from map', () {
+    final block = TextBlock.fromMap({
+      'text': 'hello',
+      'confidence': 0.9,
+      'isRotated180': true,
+      'points': [
+        {'x': 1.0, 'y': 2.0},
+        {'x': 5.0, 'y': 2.0},
+        {'x': 5.0, 'y': 6.0},
+        {'x': 1.0, 'y': 6.0},
+      ],
+    });
+
+    expect(block.isRotated180, isTrue);
+  });
+
+  test('TextBlock defaults isRotated180 to false when omitted', () {
+    final block = TextBlock.fromMap({
+      'text': 'hello',
+      'confidence': 0.9,
+      'points': [
+        {'x': 1.0, 'y': 2.0},
+        {'x': 5.0, 'y': 2.0},
+      ],
+    });
+
+    expect(block.isRotated180, isFalse);
+  });
+
   test('hasText validates image path exists', () async {
     final mobileOcr = MobileOcr();
     expect(

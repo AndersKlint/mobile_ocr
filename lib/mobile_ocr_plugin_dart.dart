@@ -295,6 +295,7 @@ class DartMobileOcr extends MobileOcrPlatform {
       maps.add({
         'text': text,
         'confidence': confidence,
+        'isRotated180': result.isRotated180[i],
         'points': box.points.map((p) => {'x': p.x, 'y': p.y}).toList(),
         'boundingBox': {
           'left': box.boundingRect().left,

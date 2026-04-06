@@ -6,12 +6,14 @@ class TextBlock {
   final double confidence;
   final List<Offset> points;
   final List<CharacterBox> characters;
+  final bool isRotated180;
 
   const TextBlock({
     required this.text,
     required this.confidence,
     required this.points,
     required this.characters,
+    this.isRotated180 = false,
   });
 
   Rect get boundingBox {
@@ -64,12 +66,14 @@ class TextBlock {
       confidence: confidence,
       points: points,
       characters: characters,
+      isRotated180: map['isRotated180'] == true,
     );
   }
 
   Map<String, dynamic> toMap() => {
     'text': text,
     'confidence': confidence,
+    'isRotated180': isRotated180,
     'points': points
         .map((point) => {'x': point.dx, 'y': point.dy})
         .toList(growable: false),
