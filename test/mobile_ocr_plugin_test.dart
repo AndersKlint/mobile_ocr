@@ -6,6 +6,9 @@ import 'package:mobile_ocr/mobile_ocr_plugin.dart';
 import 'package:mobile_ocr/mobile_ocr_plugin_platform_interface.dart';
 import 'package:mobile_ocr/mobile_ocr_plugin_dart.dart';
 import 'package:mobile_ocr/models/text_block.dart';
+import 'package:mobile_ocr/src/ocr/image_utils.dart';
+import 'package:mobile_ocr/src/ocr/ocr_processor.dart';
+import 'package:mobile_ocr/src/ocr/types.dart' as ocr;
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
 class MockMobileOcrPlatform
@@ -207,6 +210,86 @@ void main() {
     expect(verifyingPlatform.lastRecognitionBrightnessBoost, 0.01);
 
     await tempDir.delete(recursive: true);
+  });
+
+  test('maps rotated boxes back to original orientation', () {
+    const originalWidth = 200;
+    const originalHeight = 100;
+    final originalPoints = <ocr.Point>[
+      const ocr.Point(20, 10),
+      const ocr.Point(80, 10),
+      const ocr.Point(80, 30),
+      const ocr.Point(20, 30),
+    ];
+
+    final rotatedPoints = ImageUtils.orderPointsClockwise(
+      originalPoints
+          .map((point) => ocr.Point((originalHeight - 1) - point.y, point.x))
+          .toList(growable: false),
+    );
+
+    final result = OcrProcessor.mapResultToOriginalOrientationForTest(
+      ocr.OcrResult(
+        boxes: [ocr.TextBox(rotatedPoints)],
+        texts: ['test'],
+        scores: [0.9],
+        characters: [
+          [ocr.CharacterBox(text: 't', confidence: 0.8, points: rotatedPoints)],
+        ],
+        isRotated180: [false],
+      ),
+      angle: 90,
+      originalWidth: originalWidth,
+      originalHeight: originalHeight,
+    );
+
+    expect(result.boxes, hasLength(1));
+    expect(result.characters.single, hasLength(1));
+    expect(result.boxes.single.points, originalPoints);
+    expect(result.characters.single.single.points, originalPoints);
+  });
+
+  test('maps 180-rotated boxes back to original orientation', () {
+    const originalWidth = 200;
+    const originalHeight = 100;
+    final originalPoints = <ocr.Point>[
+      const ocr.Point(20, 10),
+      const ocr.Point(80, 10),
+      const ocr.Point(80, 30),
+      const ocr.Point(20, 30),
+    ];
+
+    final rotatedPoints = ImageUtils.orderPointsClockwise(
+      originalPoints
+          .map(
+            (point) => ocr.Point(
+              (originalWidth - 1) - point.x,
+              (originalHeight - 1) - point.y,
+            ),
+          )
+          .toList(growable: false),
+    );
+
+    final result = OcrProcessor.mapResultToOriginalOrientationForTest(
+      ocr.OcrResult(
+        boxes: [ocr.TextBox(rotatedPoints)],
+        texts: ['test'],
+        scores: [0.9],
+        characters: [
+          [ocr.CharacterBox(text: 't', confidence: 0.8, points: rotatedPoints)],
+        ],
+        isRotated180: [true],
+      ),
+      angle: 180,
+      originalWidth: originalWidth,
+      originalHeight: originalHeight,
+    );
+
+    expect(result.boxes, hasLength(1));
+    expect(result.characters.single, hasLength(1));
+    expect(result.boxes.single.points, originalPoints);
+    expect(result.characters.single.single.points, originalPoints);
+    expect(result.isRotated180.single, isTrue);
   });
 }
 

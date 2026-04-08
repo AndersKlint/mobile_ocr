@@ -15,6 +15,7 @@ class OcrProcessor {
   static const double angleAspectRatioThreshold = 0.5;
   static const double lowConfidenceThreshold = 0.55;
   static const int quickCheckMaxCandidates = 3;
+  static const List<int> _pageOrientationProbeAngles = [0, 90, 180, 270];
 
   final OrtSession detectionSession;
   final OrtSession recognitionSession;
@@ -109,6 +110,38 @@ class OcrProcessor {
     bool includeAllConfidenceScores = false,
   }) async {
     await debugSession?.saveImage('00_source/source.png', bitmap);
+
+    final selectedOrientation = await _selectBestPageOrientation(bitmap);
+    final workingBitmap = selectedOrientation.angle == 0
+        ? bitmap
+        : img.copyRotate(bitmap, angle: selectedOrientation.angle);
+    await debugSession?.writeJson('00_source/page_orientation.json', {
+      'selectedAngle': selectedOrientation.angle,
+      'candidateCount': selectedOrientation.candidateCount,
+      'maxDetectionScore': selectedOrientation.maxDetectionScore,
+    });
+
+    final rawResult = await _processOrientedImage(
+      workingBitmap,
+      includeAllConfidenceScores: includeAllConfidenceScores,
+    );
+
+    if (selectedOrientation.angle == 0 || rawResult.boxes.isEmpty) {
+      return rawResult;
+    }
+
+    return _mapResultToOriginalOrientation(
+      rawResult,
+      angle: selectedOrientation.angle,
+      originalWidth: bitmap.width,
+      originalHeight: bitmap.height,
+    );
+  }
+
+  Future<OcrResult> _processOrientedImage(
+    img.Image bitmap, {
+    required bool includeAllConfidenceScores,
+  }) async {
     final detectionResult = await _detector.detect(bitmap);
 
     if (detectionResult.isEmpty) {
@@ -254,6 +287,131 @@ class OcrProcessor {
       scores: filteredScores,
       characters: filteredCharacters,
       isRotated180: filteredRotated180,
+    );
+  }
+
+  Future<_PageOrientationSelection> _selectBestPageOrientation(
+    img.Image bitmap,
+  ) async {
+    _PageOrientationSelection? best;
+
+    for (final angle in _pageOrientationProbeAngles) {
+      final candidateBitmap = angle == 0
+          ? bitmap
+          : img.copyRotate(bitmap, angle: angle);
+      final summary = await _detector.collectHighConfidenceDetections(
+        candidateBitmap,
+        minimumDetectionConfidence: minRecognitionScore,
+        maxCandidates: quickCheckMaxCandidates,
+      );
+      final selection = _PageOrientationSelection(
+        angle: angle,
+        candidateCount: summary.candidates.length,
+        maxDetectionScore: summary.maxDetectionScore ?? 0.0,
+      );
+
+      if (best == null || selection.compareTo(best) > 0) {
+        best = selection;
+      }
+    }
+
+    return best ?? const _PageOrientationSelection(angle: 0);
+  }
+
+  static OcrResult _mapResultToOriginalOrientation(
+    OcrResult result, {
+    required int angle,
+    required int originalWidth,
+    required int originalHeight,
+  }) {
+    return OcrResult(
+      boxes: result.boxes
+          .map(
+            (box) => TextBox(
+              ImageUtils.orderPointsClockwise(
+                _mapPointsToOriginalOrientation(
+                  box.points,
+                  angle: angle,
+                  originalWidth: originalWidth,
+                  originalHeight: originalHeight,
+                ),
+              ),
+            ),
+          )
+          .toList(growable: false),
+      texts: List<String>.from(result.texts),
+      scores: List<double>.from(result.scores),
+      characters: result.characters
+          .map(
+            (characters) => characters
+                .map(
+                  (character) => CharacterBox(
+                    text: character.text,
+                    confidence: character.confidence,
+                    points: ImageUtils.orderPointsClockwise(
+                      _mapPointsToOriginalOrientation(
+                        character.points,
+                        angle: angle,
+                        originalWidth: originalWidth,
+                        originalHeight: originalHeight,
+                      ),
+                    ),
+                  ),
+                )
+                .toList(growable: false),
+          )
+          .toList(growable: false),
+      isRotated180: List<bool>.from(result.isRotated180),
+    );
+  }
+
+  static List<Point> _mapPointsToOriginalOrientation(
+    List<Point> points, {
+    required int angle,
+    required int originalWidth,
+    required int originalHeight,
+  }) {
+    return points
+        .map(
+          (point) => _mapPointToOriginalOrientation(
+            point,
+            angle: angle,
+            originalWidth: originalWidth,
+            originalHeight: originalHeight,
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  static Point _mapPointToOriginalOrientation(
+    Point point, {
+    required int angle,
+    required int originalWidth,
+    required int originalHeight,
+  }) {
+    return switch (angle) {
+      90 => Point(point.y, (originalHeight - 1) - point.x),
+      180 => Point(
+        (originalWidth - 1) - point.x,
+        (originalHeight - 1) - point.y,
+      ),
+      270 => Point((originalWidth - 1) - point.y, point.x),
+      _ => point,
+    };
+  }
+
+  @visibleForTesting
+  static OcrResult mapResultToOriginalOrientationForTest(
+    OcrResult result, {
+    required int angle,
+    required int originalWidth,
+    required int originalHeight,
+  }) {
+    return _mapResultToOriginalOrientation(
+      result,
+      angle: angle,
+      originalWidth: originalWidth,
+      originalHeight: originalHeight,
     );
   }
 
@@ -514,5 +672,41 @@ class OcrProcessor {
     recognitionSession.release();
     classificationSession?.release();
     OrtEnv.instance.release();
+  }
+}
+
+class _PageOrientationSelection
+    implements Comparable<_PageOrientationSelection> {
+  final int angle;
+  final int candidateCount;
+  final double maxDetectionScore;
+
+  const _PageOrientationSelection({
+    required this.angle,
+    this.candidateCount = 0,
+    this.maxDetectionScore = 0.0,
+  });
+
+  @override
+  int compareTo(_PageOrientationSelection other) {
+    final candidateComparison = candidateCount.compareTo(other.candidateCount);
+    if (candidateComparison != 0) {
+      return candidateComparison;
+    }
+
+    final scoreComparison = maxDetectionScore.compareTo(
+      other.maxDetectionScore,
+    );
+    if (scoreComparison != 0) {
+      return scoreComparison;
+    }
+
+    if (angle == 0 && other.angle != 0) {
+      return 1;
+    }
+    if (angle != 0 && other.angle == 0) {
+      return -1;
+    }
+    return 0;
   }
 }
