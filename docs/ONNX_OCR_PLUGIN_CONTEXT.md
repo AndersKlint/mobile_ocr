@@ -99,11 +99,11 @@ onnx_ocr_plugin/
 
 2. **Text Angle Classification** (`TextClassifier.kt`)
 
-   - Purpose: Detect 180-degree rotated text
-   - Input shape: (3, 48, 192)
-   - Normalization: (pixel/255 - 0.5) / 0.5
-   - Threshold: 0.9 for rotation decision
-   - Classes: ["0", "180"]
+    - Purpose: Detect 180-degree rotated text
+    - Original Paddle config uses shape `(3, 48, 192)`; verify converted ONNX input metadata before changing runtime preprocessing assumptions
+    - Normalization: (pixel/255 - 0.5) / 0.5
+    - Threshold: `0.75` for rotation decision in this plugin
+    - Classes: ["0", "180"]
 
 3. **Text Recognition** (`TextRecognizer.kt`)
    - Algorithm: SVTR_LCNet with CTC decoder
@@ -154,9 +154,9 @@ onnx_ocr_plugin/
 - **Preprocessing**: DetResizeForTest → NormalizeImage → ToCHWImage
 - **Postprocessing**: DBPostProcess with polygon/quad output
 - **Key parameters**:
-  - `det_limit_side_len`: 960
-  - `det_db_thresh`: 0.3
-  - `det_db_box_thresh`: 0.6
+  - `det_limit_side_len`: `1536` in this plugin for better small-text recall
+  - `det_db_thresh`: `0.5` in this plugin
+  - `det_db_box_thresh`: `0.5` in this plugin
   - `det_db_unclip_ratio`: 1.5
 
 #### Recognition Model
@@ -165,6 +165,27 @@ onnx_ocr_plugin/
 - **Character set**: ~6000+ Chinese characters + English + symbols
 - **Decoding**: CTC with blank token at index 0
 - **Confidence**: Average of character probabilities
+
+#### Page Orientation Flow
+
+- Probe `0°` vs `90°` using fast detection summaries
+- Keep the better probe orientation
+- Apply full OCR once on the selected orientation
+
+#### Crop Orientation Flow
+
+- Portrait-like crops are rotated to horizontal for recognition
+- Landscape-like crops are kept as-is
+- Ambiguous crops use a landscape preference bias based on the majority of other boxes on the page
+- When the page is landscape, that fallback bias prefers landscape text lines
+
+#### Angle Classification Policy
+
+- Narrow/tall crops are sent through the angle classifier first
+- Low-confidence crops can be retried through the classifier path
+- Landscape pages may classify all crops to avoid missing upside-down text lines
+
+`preferLandscape` is the correct name for this bias. It is a tie-break preference for ambiguous crops, not a literal `isLandscape` flag.
 
 ## Configuration Notes
 

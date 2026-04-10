@@ -61,7 +61,7 @@ The OnnxOCR repository implements a complete OCR pipeline using ONNX runtime wit
 
 #### Output
 - **Format**: Probability array for ["0", "180"] classes
-- **Action**: If class "180" probability > 0.9, rotate image 180°
+- **Action**: In this plugin, classifier outputs are used as one signal for 180° crop correction with `cls_thresh = 0.75`
 
 ### 3. Text Recognition Model (`rec.onnx`)
 **Path**: `models/ppocrv5/rec/rec.onnx`
@@ -106,12 +106,14 @@ sorted_boxes(dt_boxes):
 
 ## Default Parameters
 
+The values below describe the original Paddle/OnnxOCR defaults. This plugin intentionally tunes some of them for mobile photos and dense Chinese text, while keeping the same PP-OCR v5 model family.
+
 ### Detection Parameters
 - `det_algorithm`: "DB"
-- `det_limit_side_len`: 960
+- `det_limit_side_len`: 960 in upstream, `1536` in this plugin
 - `det_limit_type`: "max"
-- `det_db_thresh`: 0.3
-- `det_db_box_thresh`: 0.6
+- `det_db_thresh`: 0.3 in upstream, `0.5` in this plugin
+- `det_db_box_thresh`: 0.6 in upstream, `0.5` in this plugin
 - `det_db_unclip_ratio`: 1.5
 - `det_box_type`: "quad"
 - `use_dilation`: False
@@ -119,9 +121,9 @@ sorted_boxes(dt_boxes):
 
 ### Classification Parameters
 - `use_angle_cls`: False (disabled by default)
-- `cls_image_shape`: "3, 48, 192"
+- `cls_image_shape`: original Paddle config is `3,48,192`; verify the converted ONNX input contract before changing runtime preprocessing
 - `cls_batch_num`: 6
-- `cls_thresh`: 0.9
+- `cls_thresh`: 0.9 in upstream, `0.75` in this plugin
 - `label_list`: ["0", "180"]
 
 ### Recognition Parameters
@@ -130,6 +132,28 @@ sorted_boxes(dt_boxes):
 - `rec_batch_num`: 6
 - `use_space_char`: True
 - `drop_score`: 0.5 (minimum confidence threshold)
+
+## Mobile Orientation Strategy
+
+This plugin probes page orientation using detection at `0°` and `90°`, then runs full OCR on the chosen orientation.
+
+## Crop Orientation Strategy
+
+- Clearly tall crops are rotated to landscape for recognition
+- Clearly wide crops are kept as-is
+- Ambiguous crops use a landscape preference bias derived from the majority of other boxes on the page
+- If the page itself is landscape, the fallback bias prefers landscape text lines
+
+The `preferLandscape` naming is intentional: it is a tie-break preference for ambiguous crops, not a statement that a crop is already landscape.
+
+## Angle Classification Strategy
+
+- The classifier prefers narrow/tall recognition crops (`width / height < 0.5`)
+- Low-confidence recognition results are retried through the classifier path
+- Landscape-oriented pages may classify all crops to avoid missing upside-down text lines
+- Unclassified crops still use majority fallback for default `180°` direction
+
+This keeps the earlier landscape behavior that produced better recognition while still improving ambiguous crop orientation.
 
 ## ONNX Runtime Configuration
 
@@ -172,8 +196,8 @@ session = onnxruntime.InferenceSession(model_path, providers=providers)
 
 ### Required Libraries
 - ONNX Runtime for Android
-- OpenCV or equivalent for image processing
-- Support for numpy-like array operations
+- Pure Dart / platform-native image processing (no OpenCV)
+- Support for float tensor conversion and perspective crop logic
 
 ### Key Components to Implement
 1. **Image Preprocessing Module**

@@ -119,6 +119,7 @@ class OcrProcessor {
     final workingBitmap = normalizedAngle == 0
         ? bitmap
         : img.copyRotate(bitmap, angle: normalizedAngle);
+
     await debugSession?.writeJson('00_source/page_orientation.json', {
       'selectedAngle': selectedOrientation.angle,
       'normalizedAngle': normalizedAngle,
@@ -166,28 +167,14 @@ class OcrProcessor {
       );
     }
 
-    final croppedImages = <img.Image>[];
-    final preparedBoxes = <List<Point>>[];
-    for (final box in detectionResult) {
-      final orderedPoints = _prepareRecognitionBox(bitmap, box.points);
-      preparedBoxes.add(orderedPoints);
-    }
-
-    final dominantLandscapePreference =
-        _resolveRecognitionBoxLandscapePreference(
-          preparedBoxes,
-          fallback: preferLandscapeRecognitionBoxes,
-        );
-
-    for (final orderedPoints in preparedBoxes) {
-      final cropped = ImageUtils.cropTextRegion(
-        bitmap,
-        orderedPoints,
-        trimWhitespace: processingOptions.trimRecognitionWhitespace,
-        preferLandscape: dominantLandscapePreference,
-      );
-      croppedImages.add(cropped);
-    }
+    final preparedRecognition = _prepareRecognitionCrops(
+      bitmap,
+      detectionResult,
+      preferLandscapeFallback: preferLandscapeRecognitionBoxes,
+    );
+    final preparedBoxes = preparedRecognition.preparedBoxes;
+    final croppedImages = preparedRecognition.croppedImages;
+    final dominantLandscapePreference = preparedRecognition.preferLandscape;
 
     await _dumpPreparedCrops(detectionResult, preparedBoxes, croppedImages);
 
@@ -673,6 +660,38 @@ class OcrProcessor {
     return recognitionResults.firstOrNull;
   }
 
+  _PreparedRecognitionCrops _prepareRecognitionCrops(
+    img.Image bitmap,
+    List<TextBox> boxes, {
+    required bool preferLandscapeFallback,
+  }) {
+    final preparedBoxes = <List<Point>>[];
+    for (final box in boxes) {
+      preparedBoxes.add(_prepareRecognitionBox(bitmap, box.points));
+    }
+
+    final preferLandscape = _resolveRecognitionBoxLandscapePreference(
+      preparedBoxes,
+      fallback: preferLandscapeFallback,
+    );
+    final croppedImages = preparedBoxes
+        .map(
+          (points) => ImageUtils.cropTextRegion(
+            bitmap,
+            points,
+            trimWhitespace: processingOptions.trimRecognitionWhitespace,
+            preferLandscape: preferLandscape,
+          ),
+        )
+        .toList(growable: false);
+
+    return _PreparedRecognitionCrops(
+      preparedBoxes: preparedBoxes,
+      croppedImages: croppedImages,
+      preferLandscape: preferLandscape,
+    );
+  }
+
   Future<void> classifyAndRotateIndices(
     List<img.Image> images,
     List<int> indices,
@@ -870,4 +889,16 @@ class _PageOrientationSelection
     }
     return 0;
   }
+}
+
+class _PreparedRecognitionCrops {
+  final List<List<Point>> preparedBoxes;
+  final List<img.Image> croppedImages;
+  final bool preferLandscape;
+
+  const _PreparedRecognitionCrops({
+    required this.preparedBoxes,
+    required this.croppedImages,
+    required this.preferLandscape,
+  });
 }
