@@ -136,7 +136,6 @@ class OcrResult {
   final List<double> scores;
   final List<List<CharacterBox>> characters;
   final List<String> textOrientations;
-  final List<bool> isRotated180;
 
   OcrResult({
     required this.boxes,
@@ -144,7 +143,6 @@ class OcrResult {
     required this.scores,
     required this.characters,
     required this.textOrientations,
-    required this.isRotated180,
   });
 }
 

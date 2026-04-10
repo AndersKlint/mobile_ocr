@@ -127,23 +127,6 @@ void main() {
     expect(block.boundingBox.bottom, 7.0);
   });
 
-  test('TextBlock reads isRotated180 from map', () {
-    final block = TextBlock.fromMap({
-      'text': 'hello',
-      'confidence': 0.9,
-      'textOrientation': 'landscapeDown',
-      'isRotated180': true,
-      'points': [
-        {'x': 1.0, 'y': 2.0},
-        {'x': 5.0, 'y': 2.0},
-        {'x': 5.0, 'y': 6.0},
-        {'x': 1.0, 'y': 6.0},
-      ],
-    });
-
-    expect(block.isRotated180, isTrue);
-  });
-
   test('TextBlock reads textOrientation from map', () {
     final block = TextBlock.fromMap({
       'text': 'hello',
@@ -160,18 +143,19 @@ void main() {
     expect(block.textOrientation, TextOrientation.portraitDown);
   });
 
-  test('TextBlock defaults isRotated180 to false when omitted', () {
+  test('TextBlock ignores deprecated isRotated180 map field', () {
     final block = TextBlock.fromMap({
       'text': 'hello',
       'confidence': 0.9,
       'textOrientation': 'landscapeUp',
+      'isRotated180': true,
       'points': [
         {'x': 1.0, 'y': 2.0},
         {'x': 5.0, 'y': 2.0},
       ],
     });
 
-    expect(block.isRotated180, isFalse);
+    expect(block.textOrientation, TextOrientation.landscapeUp);
   });
 
   test('TextBlock requires textOrientation in map', () {
@@ -285,7 +269,6 @@ void main() {
           [ocr.CharacterBox(text: 't', confidence: 0.8, points: rotatedPoints)],
         ],
         textOrientations: [TextOrientation.landscapeUp.name],
-        isRotated180: [false],
       ),
       angle: 90,
       originalWidth: originalWidth,
@@ -329,7 +312,6 @@ void main() {
           [ocr.CharacterBox(text: 't', confidence: 0.8, points: rotatedPoints)],
         ],
         textOrientations: [TextOrientation.portraitDown.name],
-        isRotated180: [true],
       ),
       angle: 180,
       originalWidth: originalWidth,
@@ -341,7 +323,6 @@ void main() {
     expect(result.boxes.single.points, originalPoints);
     expect(result.characters.single.single.points, originalPoints);
     expect(result.textOrientations.single, TextOrientation.portraitUp.name);
-    expect(result.isRotated180.single, isTrue);
   });
 
   test('resolves text orientation from crop normalization state', () {
@@ -391,6 +372,58 @@ void main() {
       TextOrientation.portraitDown.name,
     );
   });
+
+  test('resolves ambiguous boxes to the preferred landscape direction', () {
+    final ambiguousBox = ocr.TextBox(const [
+      ocr.Point(10, 10),
+      ocr.Point(60, 10),
+      ocr.Point(60, 50),
+      ocr.Point(10, 50),
+    ]);
+
+    expect(
+      OcrProcessor.resolveTextOrientationForTest(
+        ambiguousBox,
+        false,
+        preferLandscape: true,
+      ),
+      TextOrientation.landscapeUp.name,
+    );
+  });
+
+  test(
+    'character boxes follow the preferred landscape direction for ambiguous boxes',
+    () {
+      final box = ocr.TextBox(const [
+        ocr.Point(10, 10),
+        ocr.Point(60, 10),
+        ocr.Point(60, 50),
+        ocr.Point(10, 50),
+      ]);
+
+      final characters = OcrProcessor.buildCharacterBoxesForTest(
+        box,
+        [
+          ocr.CharacterSpan(
+            text: 'a',
+            confidence: 0.9,
+            startRatio: 0.0,
+            endRatio: 0.5,
+          ),
+        ],
+        false,
+        preferLandscape: true,
+      );
+
+      expect(characters, hasLength(1));
+      expect(characters.single.points, const [
+        ocr.Point(10, 30),
+        ocr.Point(60, 30),
+        ocr.Point(60, 50),
+        ocr.Point(10, 50),
+      ]);
+    },
+  );
 
   test('normalizes landscape orientation to canonical 90-degree rotation', () {
     expect(

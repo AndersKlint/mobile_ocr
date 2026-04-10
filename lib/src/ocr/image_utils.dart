@@ -457,7 +457,7 @@ class ImageUtils {
         return false;
       }
 
-      return preferLandscape && cropHeight > cropWidth;
+      return preferLandscape;
     }
 
     if (!inferredPreference) {

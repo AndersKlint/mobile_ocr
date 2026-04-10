@@ -165,7 +165,6 @@ class OcrProcessor {
         scores: [],
         characters: [],
         textOrientations: [],
-        isRotated180: [],
       );
     }
 
@@ -286,7 +285,6 @@ class OcrProcessor {
     final filteredScores = <double>[];
     final filteredCharacters = <List<CharacterBox>>[];
     final filteredTextOrientations = <String>[];
-    final filteredRotated180 = <bool>[];
 
     for (int i = 0; i < recognitionResults.length; i++) {
       final recognition = recognitionResults[i];
@@ -296,7 +294,6 @@ class OcrProcessor {
         filteredScores.add(recognition.confidence);
         filteredCharacters.add(characterBoxesPerDetection[i]);
         filteredTextOrientations.add(textOrientationsPerDetection[i]);
-        filteredRotated180.add(rotationStates[i]);
       }
     }
 
@@ -309,7 +306,6 @@ class OcrProcessor {
           'text': filteredTexts[index],
           'confidence': filteredScores[index],
           'textOrientation': filteredTextOrientations[index],
-          'isRotated180': filteredRotated180[index],
           'points': filteredResults[index].points
               .map((point) => {'x': point.x, 'y': point.y})
               .toList(growable: false),
@@ -323,7 +319,6 @@ class OcrProcessor {
       scores: filteredScores,
       characters: filteredCharacters,
       textOrientations: filteredTextOrientations,
-      isRotated180: filteredRotated180,
     );
   }
 
@@ -413,7 +408,6 @@ class OcrProcessor {
             (orientation) => _rotateTextOrientation(orientation, angle: angle),
           )
           .toList(growable: false),
-      isRotated180: List<bool>.from(result.isRotated180),
     );
   }
 

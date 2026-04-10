@@ -33,7 +33,6 @@ class TextBlock {
   final List<Offset> points;
   final List<CharacterBox> characters;
   final TextOrientation textOrientation;
-  final bool isRotated180;
 
   const TextBlock({
     required this.text,
@@ -41,7 +40,6 @@ class TextBlock {
     required this.points,
     required this.characters,
     this.textOrientation = TextOrientation.portraitUp,
-    this.isRotated180 = false,
   });
 
   Rect get boundingBox {
@@ -95,7 +93,6 @@ class TextBlock {
       points: points,
       characters: characters,
       textOrientation: _parseTextOrientation(map),
-      isRotated180: map['isRotated180'] == true,
     );
   }
 
@@ -103,7 +100,6 @@ class TextBlock {
     'text': text,
     'confidence': confidence,
     'textOrientation': textOrientation.name,
-    'isRotated180': isRotated180,
     'points': points
         .map((point) => {'x': point.dx, 'y': point.dy})
         .toList(growable: false),

@@ -114,6 +114,24 @@ void main() {
       },
     );
 
+    test(
+      'cropTextRegion rotates ambiguous wider boxes when landscape is preferred',
+      () {
+        final source = img.Image(width: 120, height: 120);
+        img.fill(source, color: img.ColorRgb8(255, 255, 255));
+
+        final crop = ImageUtils.cropTextRegion(source, const [
+          Point(20, 30),
+          Point(70, 30),
+          Point(70, 70),
+          Point(20, 70),
+        ], preferLandscape: true);
+
+        expect(crop.width, 40);
+        expect(crop.height, 50);
+      },
+    );
+
     test('shouldRotateRecognitionRegion keeps tall boxes portrait', () {
       expect(
         ImageUtils.shouldRotateRecognitionRegion(
