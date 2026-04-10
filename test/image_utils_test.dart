@@ -96,6 +96,65 @@ void main() {
       expect(crop.height, greaterThan(25));
     });
 
+    test('rotateOrthogonal rotates 90 degrees clockwise', () {
+      final source = img.Image(width: 2, height: 3, numChannels: 4);
+      source.setPixelRgba(0, 0, 10, 0, 0, 255);
+      source.setPixelRgba(1, 0, 20, 0, 0, 255);
+      source.setPixelRgba(0, 1, 30, 0, 0, 255);
+      source.setPixelRgba(1, 1, 40, 0, 0, 255);
+      source.setPixelRgba(0, 2, 50, 0, 0, 255);
+      source.setPixelRgba(1, 2, 60, 0, 0, 255);
+
+      final rotated = ImageUtils.rotateOrthogonal(source, angle: 90);
+
+      expect(rotated.width, 3);
+      expect(rotated.height, 2);
+      expect(rotated.getPixel(0, 0).r, 50);
+      expect(rotated.getPixel(1, 0).r, 30);
+      expect(rotated.getPixel(2, 0).r, 10);
+      expect(rotated.getPixel(0, 1).r, 60);
+      expect(rotated.getPixel(1, 1).r, 40);
+      expect(rotated.getPixel(2, 1).r, 20);
+    });
+
+    test('rotateOrthogonal rotates 180 degrees', () {
+      final source = img.Image(width: 2, height: 2, numChannels: 4);
+      source.setPixelRgba(0, 0, 10, 0, 0, 255);
+      source.setPixelRgba(1, 0, 20, 0, 0, 255);
+      source.setPixelRgba(0, 1, 30, 0, 0, 255);
+      source.setPixelRgba(1, 1, 40, 0, 0, 255);
+
+      final rotated = ImageUtils.rotateOrthogonal(source, angle: 180);
+
+      expect(rotated.width, 2);
+      expect(rotated.height, 2);
+      expect(rotated.getPixel(0, 0).r, 40);
+      expect(rotated.getPixel(1, 0).r, 30);
+      expect(rotated.getPixel(0, 1).r, 20);
+      expect(rotated.getPixel(1, 1).r, 10);
+    });
+
+    test('rotateOrthogonal rotates 270 degrees clockwise', () {
+      final source = img.Image(width: 2, height: 3, numChannels: 4);
+      source.setPixelRgba(0, 0, 10, 0, 0, 255);
+      source.setPixelRgba(1, 0, 20, 0, 0, 255);
+      source.setPixelRgba(0, 1, 30, 0, 0, 255);
+      source.setPixelRgba(1, 1, 40, 0, 0, 255);
+      source.setPixelRgba(0, 2, 50, 0, 0, 255);
+      source.setPixelRgba(1, 2, 60, 0, 0, 255);
+
+      final rotated = ImageUtils.rotateOrthogonal(source, angle: 270);
+
+      expect(rotated.width, 3);
+      expect(rotated.height, 2);
+      expect(rotated.getPixel(0, 0).r, 20);
+      expect(rotated.getPixel(1, 0).r, 40);
+      expect(rotated.getPixel(2, 0).r, 60);
+      expect(rotated.getPixel(0, 1).r, 10);
+      expect(rotated.getPixel(1, 1).r, 30);
+      expect(rotated.getPixel(2, 1).r, 50);
+    });
+
     test(
       'cropTextRegion defaults ambiguous boxes to landscape when preferred',
       () {

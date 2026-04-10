@@ -117,10 +117,30 @@ class ImageUtils {
       preferLandscape: preferLandscape,
     );
     final normalized = shouldRotateToLandscape
-        ? img.copyRotate(cropped, angle: 90)
+        ? rotateOrthogonal(cropped, angle: 90)
         : cropped;
 
     return trimWhitespace ? trimVerticalWhitespace(normalized) : normalized;
+  }
+
+  static img.Image rotateOrthogonal(img.Image image, {required int angle}) {
+    final normalizedAngle = ((angle % 360) + 360) % 360;
+    if (normalizedAngle == 0) {
+      return image;
+    }
+
+    final sourceBytes = _tryGetUint8Bytes(image);
+    final channels = image.numChannels;
+    if (sourceBytes == null || (channels != 3 && channels != 4)) {
+      return img.copyRotate(image, angle: normalizedAngle);
+    }
+
+    return switch (normalizedAngle) {
+      90 => _rotateOrthogonalRaw(image, sourceBytes, angle: 90),
+      180 => _rotateOrthogonalRaw(image, sourceBytes, angle: 180),
+      270 => _rotateOrthogonalRaw(image, sourceBytes, angle: 270),
+      _ => img.copyRotate(image, angle: normalizedAngle),
+    };
   }
 
   static img.Image trimVerticalWhitespace(img.Image image) {
@@ -802,6 +822,69 @@ class ImageUtils {
       return null;
     }
     return image.toUint8List();
+  }
+
+  static img.Image _rotateOrthogonalRaw(
+    img.Image image,
+    Uint8List sourceBytes, {
+    required int angle,
+  }) {
+    final sourceWidth = image.width;
+    final sourceHeight = image.height;
+    final channels = image.numChannels;
+
+    final targetWidth = angle == 180 ? sourceWidth : sourceHeight;
+    final targetHeight = angle == 180 ? sourceHeight : sourceWidth;
+    final targetBytes = Uint8List(targetWidth * targetHeight * channels);
+
+    if (channels == 4) {
+      final sourcePixels = Uint32List.view(
+        sourceBytes.buffer,
+        sourceBytes.offsetInBytes,
+        sourceBytes.lengthInBytes ~/ 4,
+      );
+      final targetPixels = Uint32List.view(targetBytes.buffer);
+
+      for (int srcY = 0; srcY < sourceHeight; srcY++) {
+        final sourceRowIndex = srcY * sourceWidth;
+        for (int srcX = 0; srcX < sourceWidth; srcX++) {
+          final (dstX, dstY) = switch (angle) {
+            90 => (sourceHeight - 1 - srcY, srcX),
+            180 => (sourceWidth - 1 - srcX, sourceHeight - 1 - srcY),
+            270 => (srcY, sourceWidth - 1 - srcX),
+            _ => throw ArgumentError('Unsupported orthogonal angle: $angle'),
+          };
+
+          targetPixels[dstY * targetWidth + dstX] =
+              sourcePixels[sourceRowIndex + srcX];
+        }
+      }
+    } else {
+      for (int srcY = 0; srcY < sourceHeight; srcY++) {
+        final sourceRowOffset = srcY * sourceWidth * channels;
+        for (int srcX = 0; srcX < sourceWidth; srcX++) {
+          final (dstX, dstY) = switch (angle) {
+            90 => (sourceHeight - 1 - srcY, srcX),
+            180 => (sourceWidth - 1 - srcX, sourceHeight - 1 - srcY),
+            270 => (srcY, sourceWidth - 1 - srcX),
+            _ => throw ArgumentError('Unsupported orthogonal angle: $angle'),
+          };
+
+          final sourceOffset = sourceRowOffset + srcX * channels;
+          final targetOffset = (dstY * targetWidth + dstX) * channels;
+          targetBytes[targetOffset] = sourceBytes[sourceOffset];
+          targetBytes[targetOffset + 1] = sourceBytes[sourceOffset + 1];
+          targetBytes[targetOffset + 2] = sourceBytes[sourceOffset + 2];
+        }
+      }
+    }
+
+    return _imageFromUint8Bytes(
+      targetBytes,
+      width: targetWidth,
+      height: targetHeight,
+      numChannels: channels,
+    );
   }
 
   static img.Image _imageFromUint8Bytes(

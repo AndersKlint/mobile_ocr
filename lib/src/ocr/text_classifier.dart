@@ -3,6 +3,7 @@ import 'package:onnxruntime_v2/onnxruntime_v2.dart';
 import 'package:image/image.dart' as img;
 import 'fast_image_loader.dart';
 import 'fast_tensor_reader.dart';
+import 'image_utils.dart';
 import 'ocr_debug_dumper.dart';
 
 class ClassificationOutput {
@@ -164,6 +165,6 @@ class TextClassifier {
   }
 
   img.Image rotateImage180(img.Image bitmap) {
-    return img.copyRotate(bitmap, angle: 180);
+    return ImageUtils.rotateOrthogonal(bitmap, angle: 180);
   }
 }

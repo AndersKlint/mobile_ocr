@@ -113,13 +113,8 @@ class OcrProcessor {
     await debugSession?.saveImage('00_source/source.png', bitmap);
 
     final selectedOrientation = await _selectBestPageOrientation(bitmap);
-    final normalizedAngle = _normalizeOrientationAngle(
-      sourceIsLandscape: bitmap.width > bitmap.height,
-      detectedIsLandscape: selectedOrientation.isLandscape,
-    );
-    final workingBitmap = normalizedAngle == 0
-        ? bitmap
-        : img.copyRotate(bitmap, angle: normalizedAngle);
+    final normalizedAngle = selectedOrientation.angle;
+    final workingBitmap = selectedOrientation.bitmap;
 
     await debugSession?.writeJson('00_source/page_orientation.json', {
       'selectedAngle': selectedOrientation.angle,
@@ -331,13 +326,14 @@ class OcrProcessor {
     for (final angle in _pageOrientationProbeAngles) {
       final candidateBitmap = angle == 0
           ? bitmap
-          : img.copyRotate(bitmap, angle: angle);
+          : ImageUtils.rotateOrthogonal(bitmap, angle: angle);
       final summary = await _detector.collectHighConfidenceDetections(
         candidateBitmap,
         minimumDetectionConfidence: minRecognitionScore,
         maxCandidates: quickCheckMaxCandidates,
       );
       final selection = _PageOrientationSelection(
+        bitmap: candidateBitmap,
         angle: angle,
         isLandscape: candidateBitmap.width > candidateBitmap.height,
         candidateCount: summary.candidates.length,
@@ -350,14 +346,24 @@ class OcrProcessor {
     }
 
     if (best == null) {
-      return const _PageOrientationSelection(angle: 0, isLandscape: false);
+      return _PageOrientationSelection(
+        bitmap: bitmap,
+        angle: 0,
+        isLandscape: false,
+      );
     }
 
     if (best.isLandscape == bitmapIsLandscape) {
-      return const _PageOrientationSelection(angle: 0, isLandscape: false);
+      return _PageOrientationSelection(
+        bitmap: bitmap,
+        angle: 0,
+        isLandscape: bitmapIsLandscape,
+        candidateCount: best.candidateCount,
+        maxDetectionScore: best.maxDetectionScore,
+      );
     }
 
-    return const _PageOrientationSelection(angle: 90, isLandscape: true);
+    return best;
   }
 
   static OcrResult _mapResultToOriginalOrientation(
@@ -931,12 +937,14 @@ class OcrProcessor {
 
 class _PageOrientationSelection
     implements Comparable<_PageOrientationSelection> {
+  final img.Image bitmap;
   final int angle;
   final bool isLandscape;
   final int candidateCount;
   final double maxDetectionScore;
 
-  const _PageOrientationSelection({
+  _PageOrientationSelection({
+    required this.bitmap,
     required this.angle,
     required this.isLandscape,
     this.candidateCount = 0,

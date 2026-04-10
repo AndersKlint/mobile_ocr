@@ -10,10 +10,10 @@ import 'fast_tensor_reader.dart';
 import 'ocr_debug_dumper.dart';
 
 class TextDetector {
-  static const int limitSideLen = 1536;
+  static const int limitSideLen = 1920;
   static const String limitType = 'max';
   static const double thresh = 0.5;
-  static const double boxThresh = 0.5;
+  static const double boxThresh = 0.6;
   static const double unclipRatio = 1.3;
   static const int minSize = 3;
   static const int maxCandidates = 1000;
