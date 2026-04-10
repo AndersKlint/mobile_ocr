@@ -291,6 +291,120 @@ void main() {
     expect(result.characters.single.single.points, originalPoints);
     expect(result.isRotated180.single, isTrue);
   });
+
+  test('normalizes landscape orientation to canonical 90-degree rotation', () {
+    expect(
+      OcrProcessor.normalizeOrientationAngleForTest(
+        sourceIsLandscape: false,
+        detectedIsLandscape: true,
+      ),
+      90,
+    );
+    expect(
+      OcrProcessor.normalizeOrientationAngleForTest(
+        sourceIsLandscape: true,
+        detectedIsLandscape: true,
+      ),
+      0,
+    );
+  });
+
+  test('defaults unclassified box direction to classified majority', () {
+    expect(
+      OcrProcessor.resolveDefaultRotated180ForTest(
+        classificationMask: const [true, false, true, false, true],
+        rotationStates: const [true, false, true, false, false],
+      ),
+      isTrue,
+    );
+    expect(
+      OcrProcessor.resolveDefaultRotated180ForTest(
+        classificationMask: const [true, false, true],
+        rotationStates: const [false, true, false],
+      ),
+      isFalse,
+    );
+  });
+
+  test('defaults ambiguous recognition boxes to majority landscape', () {
+    expect(
+      OcrProcessor.resolveRecognitionBoxLandscapePreferenceForTest([
+        const [
+          ocr.Point(0, 0),
+          ocr.Point(120, 0),
+          ocr.Point(120, 30),
+          ocr.Point(0, 30),
+        ],
+        const [
+          ocr.Point(10, 10),
+          ocr.Point(50, 10),
+          ocr.Point(50, 60),
+          ocr.Point(10, 60),
+        ],
+        const [
+          ocr.Point(0, 40),
+          ocr.Point(140, 40),
+          ocr.Point(140, 80),
+          ocr.Point(0, 80),
+        ],
+      ], fallback: false),
+      isTrue,
+    );
+  });
+
+  test('keeps page fallback when recognition box majority is undecided', () {
+    expect(
+      OcrProcessor.resolveRecognitionBoxLandscapePreferenceForTest([
+        const [
+          ocr.Point(10, 10),
+          ocr.Point(50, 10),
+          ocr.Point(50, 60),
+          ocr.Point(10, 60),
+        ],
+        const [
+          ocr.Point(20, 20),
+          ocr.Point(70, 20),
+          ocr.Point(70, 70),
+          ocr.Point(20, 70),
+        ],
+      ], fallback: true),
+      isTrue,
+    );
+  });
+
+  test(
+    'character boxes default ambiguous boxes to landscape when preferred',
+    () {
+      final box = ocr.TextBox(const [
+        ocr.Point(10, 10),
+        ocr.Point(50, 10),
+        ocr.Point(50, 60),
+        ocr.Point(10, 60),
+      ]);
+
+      final characters = OcrProcessor.buildCharacterBoxesForTest(
+        box,
+        [
+          ocr.CharacterSpan(
+            text: 'a',
+            confidence: 0.9,
+            startRatio: 0.0,
+            endRatio: 0.5,
+          ),
+        ],
+        false,
+        preferLandscape: true,
+      );
+
+      expect(characters, hasLength(1));
+      expect(characters.single.points, const [
+        ocr.Point(10, 35),
+        ocr.Point(50, 35),
+        ocr.Point(50, 60),
+        ocr.Point(10, 60),
+      ]);
+    },
+  );
 }
 
 class _VerifyingMobileOcrPlatform extends MockMobileOcrPlatform {

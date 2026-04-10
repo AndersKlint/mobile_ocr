@@ -15,7 +15,7 @@ class OcrProcessor {
   static const double angleAspectRatioThreshold = 0.5;
   static const double lowConfidenceThreshold = 0.55;
   static const int quickCheckMaxCandidates = 3;
-  static const List<int> _pageOrientationProbeAngles = [0, 90, 180, 270];
+  static const List<int> _pageOrientationProbeAngles = [0, 90];
 
   final OrtSession detectionSession;
   final OrtSession recognitionSession;
@@ -112,27 +112,37 @@ class OcrProcessor {
     await debugSession?.saveImage('00_source/source.png', bitmap);
 
     final selectedOrientation = await _selectBestPageOrientation(bitmap);
-    final workingBitmap = selectedOrientation.angle == 0
+    final normalizedAngle = _normalizeOrientationAngle(
+      sourceIsLandscape: bitmap.width > bitmap.height,
+      detectedIsLandscape: selectedOrientation.isLandscape,
+    );
+    final workingBitmap = normalizedAngle == 0
         ? bitmap
-        : img.copyRotate(bitmap, angle: selectedOrientation.angle);
+        : img.copyRotate(bitmap, angle: normalizedAngle);
     await debugSession?.writeJson('00_source/page_orientation.json', {
       'selectedAngle': selectedOrientation.angle,
+      'normalizedAngle': normalizedAngle,
+      'isLandscape': selectedOrientation.isLandscape,
       'candidateCount': selectedOrientation.candidateCount,
       'maxDetectionScore': selectedOrientation.maxDetectionScore,
     });
 
+    final preferLandscapeRecognitionBoxes =
+        normalizedAngle == 90 || normalizedAngle == 270;
     final rawResult = await _processOrientedImage(
       workingBitmap,
       includeAllConfidenceScores: includeAllConfidenceScores,
+      preferLandscapeRecognitionBoxes: preferLandscapeRecognitionBoxes,
+      classifyAllRecognitionCrops: preferLandscapeRecognitionBoxes,
     );
 
-    if (selectedOrientation.angle == 0 || rawResult.boxes.isEmpty) {
+    if (normalizedAngle == 0 || rawResult.boxes.isEmpty) {
       return rawResult;
     }
 
     return _mapResultToOriginalOrientation(
       rawResult,
-      angle: selectedOrientation.angle,
+      angle: normalizedAngle,
       originalWidth: bitmap.width,
       originalHeight: bitmap.height,
     );
@@ -141,6 +151,8 @@ class OcrProcessor {
   Future<OcrResult> _processOrientedImage(
     img.Image bitmap, {
     required bool includeAllConfidenceScores,
+    bool preferLandscapeRecognitionBoxes = false,
+    bool classifyAllRecognitionCrops = false,
   }) async {
     final detectionResult = await _detector.detect(bitmap);
 
@@ -158,12 +170,22 @@ class OcrProcessor {
     final preparedBoxes = <List<Point>>[];
     for (final box in detectionResult) {
       final orderedPoints = _prepareRecognitionBox(bitmap, box.points);
+      preparedBoxes.add(orderedPoints);
+    }
+
+    final dominantLandscapePreference =
+        _resolveRecognitionBoxLandscapePreference(
+          preparedBoxes,
+          fallback: preferLandscapeRecognitionBoxes,
+        );
+
+    for (final orderedPoints in preparedBoxes) {
       final cropped = ImageUtils.cropTextRegion(
         bitmap,
         orderedPoints,
         trimWhitespace: processingOptions.trimRecognitionWhitespace,
+        preferLandscape: dominantLandscapePreference,
       );
-      preparedBoxes.add(orderedPoints);
       croppedImages.add(cropped);
     }
 
@@ -175,6 +197,10 @@ class OcrProcessor {
     if (useAngleClassification && _classifier != null) {
       final aspectCandidates = <int>[];
       for (int index = 0; index < croppedImages.length; index++) {
+        if (classifyAllRecognitionCrops) {
+          aspectCandidates.add(index);
+          continue;
+        }
         final aspectRatio =
             croppedImages[index].width / croppedImages[index].height;
         if (aspectRatio < angleAspectRatioThreshold) {
@@ -234,15 +260,25 @@ class OcrProcessor {
       }
     }
 
+    final defaultRotated180 = _resolveDefaultRotated180(
+      classificationMask: classificationMask,
+      rotationStates: rotationStates,
+    );
+
     final characterBoxesPerDetection = <List<CharacterBox>>[];
     for (int index = 0; index < recognitionResults.length; index++) {
+      final rotated180 = classificationMask[index]
+          ? rotationStates[index]
+          : defaultRotated180;
       characterBoxesPerDetection.add(
         buildCharacterBoxes(
           detectionResult[index],
           recognitionResults[index].characterSpans,
-          rotationStates[index],
+          rotated180,
+          preferLandscape: dominantLandscapePreference,
         ),
       );
+      rotationStates[index] = rotated180;
     }
 
     final minThreshold = includeAllConfidenceScores
@@ -294,6 +330,7 @@ class OcrProcessor {
     img.Image bitmap,
   ) async {
     _PageOrientationSelection? best;
+    final bitmapIsLandscape = bitmap.width > bitmap.height;
 
     for (final angle in _pageOrientationProbeAngles) {
       final candidateBitmap = angle == 0
@@ -306,6 +343,7 @@ class OcrProcessor {
       );
       final selection = _PageOrientationSelection(
         angle: angle,
+        isLandscape: candidateBitmap.width > candidateBitmap.height,
         candidateCount: summary.candidates.length,
         maxDetectionScore: summary.maxDetectionScore ?? 0.0,
       );
@@ -315,7 +353,15 @@ class OcrProcessor {
       }
     }
 
-    return best ?? const _PageOrientationSelection(angle: 0);
+    if (best == null) {
+      return const _PageOrientationSelection(angle: 0, isLandscape: false);
+    }
+
+    if (best.isLandscape == bitmapIsLandscape) {
+      return const _PageOrientationSelection(angle: 0, isLandscape: false);
+    }
+
+    return const _PageOrientationSelection(angle: 90, isLandscape: true);
   }
 
   static OcrResult _mapResultToOriginalOrientation(
@@ -413,6 +459,94 @@ class OcrProcessor {
       originalWidth: originalWidth,
       originalHeight: originalHeight,
     );
+  }
+
+  @visibleForTesting
+  static int normalizeOrientationAngleForTest({
+    required bool sourceIsLandscape,
+    required bool detectedIsLandscape,
+  }) {
+    return _normalizeOrientationAngle(
+      sourceIsLandscape: sourceIsLandscape,
+      detectedIsLandscape: detectedIsLandscape,
+    );
+  }
+
+  static int _normalizeOrientationAngle({
+    required bool sourceIsLandscape,
+    required bool detectedIsLandscape,
+  }) {
+    if (sourceIsLandscape == detectedIsLandscape) {
+      return 0;
+    }
+    return 90;
+  }
+
+  @visibleForTesting
+  static bool resolveDefaultRotated180ForTest({
+    required List<bool> classificationMask,
+    required List<bool> rotationStates,
+  }) {
+    return _resolveDefaultRotated180(
+      classificationMask: classificationMask,
+      rotationStates: rotationStates,
+    );
+  }
+
+  @visibleForTesting
+  static bool resolveRecognitionBoxLandscapePreferenceForTest(
+    List<List<Point>> boxes, {
+    required bool fallback,
+  }) {
+    return _resolveRecognitionBoxLandscapePreference(boxes, fallback: fallback);
+  }
+
+  static bool _resolveDefaultRotated180({
+    required List<bool> classificationMask,
+    required List<bool> rotationStates,
+  }) {
+    var rotatedCount = 0;
+    var uprightCount = 0;
+
+    for (int index = 0; index < classificationMask.length; index++) {
+      if (!classificationMask[index]) {
+        continue;
+      }
+      if (rotationStates[index]) {
+        rotatedCount++;
+      } else {
+        uprightCount++;
+      }
+    }
+
+    return rotatedCount > uprightCount;
+  }
+
+  static bool _resolveRecognitionBoxLandscapePreference(
+    List<List<Point>> boxes, {
+    required bool fallback,
+  }) {
+    var landscapeCount = 0;
+    var portraitCount = 0;
+
+    for (final box in boxes) {
+      final prefersLandscape =
+          ImageUtils.inferRecognitionBoxLandscapePreference(box);
+      if (prefersLandscape == null) {
+        continue;
+      }
+      if (prefersLandscape) {
+        landscapeCount++;
+      } else {
+        portraitCount++;
+      }
+    }
+
+    if (landscapeCount == portraitCount) {
+      return fallback;
+    }
+
+    return landscapeCount > portraitCount;
   }
 
   Future<QuickCheckResult> hasHighConfidenceText(
@@ -566,8 +700,24 @@ class OcrProcessor {
   List<CharacterBox> buildCharacterBoxes(
     TextBox textBox,
     List<CharacterSpan> spans,
-    bool rotated,
-  ) {
+    bool rotated, {
+    bool preferLandscape = false,
+  }) {
+    return buildCharacterBoxesForTest(
+      textBox,
+      spans,
+      rotated,
+      preferLandscape: preferLandscape,
+    );
+  }
+
+  @visibleForTesting
+  static List<CharacterBox> buildCharacterBoxesForTest(
+    TextBox textBox,
+    List<CharacterSpan> spans,
+    bool rotated, {
+    bool preferLandscape = false,
+  }) {
     if (spans.isEmpty) {
       return [];
     }
@@ -581,6 +731,10 @@ class OcrProcessor {
     final topRight = ordered[1];
     final bottomRight = ordered[2];
     final bottomLeft = ordered[3];
+    final rotateForRecognition = ImageUtils.shouldRotateRecognitionBox(
+      ordered,
+      preferLandscape: preferLandscape,
+    );
 
     const epsilon = 1e-4;
 
@@ -602,26 +756,31 @@ class OcrProcessor {
             return null;
           }
 
-          final topStart = interpolate(topLeft, topRight, clampedStart);
-          final topEnd = interpolate(topLeft, topRight, clampedEnd);
-          final bottomStart = interpolate(
-            bottomLeft,
-            bottomRight,
-            clampedStart,
-          );
-          final bottomEnd = interpolate(bottomLeft, bottomRight, clampedEnd);
+          final points = rotateForRecognition
+              ? [
+                  _interpolate(bottomLeft, topLeft, clampedStart),
+                  _interpolate(bottomLeft, topLeft, clampedEnd),
+                  _interpolate(bottomRight, topRight, clampedEnd),
+                  _interpolate(bottomRight, topRight, clampedStart),
+                ]
+              : [
+                  _interpolate(topLeft, topRight, clampedStart),
+                  _interpolate(topLeft, topRight, clampedEnd),
+                  _interpolate(bottomLeft, bottomRight, clampedEnd),
+                  _interpolate(bottomLeft, bottomRight, clampedStart),
+                ];
 
           return CharacterBox(
             text: span.text,
             confidence: span.confidence,
-            points: [topStart, topEnd, bottomEnd, bottomStart],
+            points: ImageUtils.orderPointsClockwise(points),
           );
         })
         .whereType<CharacterBox>()
         .toList();
   }
 
-  Point interpolate(Point start, Point end, double ratio) {
+  static Point _interpolate(Point start, Point end, double ratio) {
     final clamped = ratio.clamp(0.0, 1.0);
     return Point(
       start.x + (end.x - start.x) * clamped,
@@ -678,11 +837,13 @@ class OcrProcessor {
 class _PageOrientationSelection
     implements Comparable<_PageOrientationSelection> {
   final int angle;
+  final bool isLandscape;
   final int candidateCount;
   final double maxDetectionScore;
 
   const _PageOrientationSelection({
     required this.angle,
+    required this.isLandscape,
     this.candidateCount = 0,
     this.maxDetectionScore = 0.0,
   });

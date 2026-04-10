@@ -10,6 +10,7 @@ class ImageUtils {
   static const int _verticalTrimMinBlankRows = 2;
   static const int _verticalTrimMinContrast = 24;
   static const int _verticalTrimMergeGapRows = 3;
+  static const double _portraitCropAspectRatioThreshold = 1.5;
   static const double defaultRecognitionContrastBoost = 0.08;
   static const double defaultRecognitionBrightnessBoost = 0.02;
 
@@ -63,6 +64,7 @@ class ImageUtils {
     img.Image bitmap,
     List<Point> points, {
     bool trimWhitespace = false,
+    bool preferLandscape = false,
   }) {
     if (points.length != 4) {
       throw ArgumentError('Expected 4 points for text region');
@@ -109,7 +111,12 @@ class ImageUtils {
       cropHeight,
     );
 
-    final normalized = cropHeight / cropWidth >= 1.5
+    final shouldRotateToLandscape = shouldRotateRecognitionRegion(
+      cropWidth: cropWidth.toDouble(),
+      cropHeight: cropHeight.toDouble(),
+      preferLandscape: preferLandscape,
+    );
+    final normalized = shouldRotateToLandscape
         ? img.copyRotate(cropped, angle: 90)
         : cropped;
 
@@ -398,6 +405,66 @@ class ImageUtils {
       distance(ordered[0], ordered[3]),
       distance(ordered[1], ordered[2]),
     );
+  }
+
+  static bool shouldRotateRecognitionBox(
+    List<Point> points, {
+    bool preferLandscape = false,
+  }) {
+    return shouldRotateRecognitionRegion(
+      cropWidth: quadWidth(points),
+      cropHeight: quadHeight(points),
+      preferLandscape: preferLandscape,
+    );
+  }
+
+  static bool? inferRecognitionRegionLandscapePreference({
+    required double cropWidth,
+    required double cropHeight,
+  }) {
+    if (cropWidth <= 0 || cropHeight <= 0) {
+      return null;
+    }
+
+    if (cropHeight / cropWidth >= _portraitCropAspectRatioThreshold) {
+      return false;
+    }
+    if (cropWidth / cropHeight >= _portraitCropAspectRatioThreshold) {
+      return true;
+    }
+
+    return null;
+  }
+
+  static bool? inferRecognitionBoxLandscapePreference(List<Point> points) {
+    return inferRecognitionRegionLandscapePreference(
+      cropWidth: quadWidth(points),
+      cropHeight: quadHeight(points),
+    );
+  }
+
+  static bool shouldRotateRecognitionRegion({
+    required double cropWidth,
+    required double cropHeight,
+    bool preferLandscape = false,
+  }) {
+    final inferredPreference = inferRecognitionRegionLandscapePreference(
+      cropWidth: cropWidth,
+      cropHeight: cropHeight,
+    );
+    if (inferredPreference == null) {
+      if (cropWidth <= 0 || cropHeight <= 0) {
+        return false;
+      }
+
+      return preferLandscape && cropHeight > cropWidth;
+    }
+
+    if (!inferredPreference) {
+      return true;
+    }
+
+    return false;
   }
 
   static List<Point> expandBox(

@@ -96,6 +96,35 @@ void main() {
       expect(crop.height, greaterThan(25));
     });
 
+    test(
+      'cropTextRegion defaults ambiguous boxes to landscape when preferred',
+      () {
+        final source = img.Image(width: 120, height: 120);
+        img.fill(source, color: img.ColorRgb8(255, 255, 255));
+
+        final crop = ImageUtils.cropTextRegion(source, const [
+          Point(30, 20),
+          Point(70, 20),
+          Point(70, 70),
+          Point(30, 70),
+        ], preferLandscape: true);
+
+        expect(crop.width, 50);
+        expect(crop.height, 40);
+      },
+    );
+
+    test('shouldRotateRecognitionRegion keeps tall boxes portrait', () {
+      expect(
+        ImageUtils.shouldRotateRecognitionRegion(
+          cropWidth: 40,
+          cropHeight: 80,
+          preferLandscape: true,
+        ),
+        isTrue,
+      );
+    });
+
     test('expandBox grows long horizontal quads symmetrically', () {
       const box = [
         Point(100, 200),

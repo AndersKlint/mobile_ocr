@@ -14,8 +14,8 @@ class ClassificationOutput {
 
 class TextClassifier {
   static const int imgHeight = 48;
-  static const int imgWidth = 192;
-  static const double clsThresh = 0.9;
+  static const int imgWidth = 320;
+  static const double clsThresh = 0.75;
   static const int batchSize = 6;
   static const List<double> _mean = [0.5, 0.5, 0.5];
   static const List<double> _std = [0.5, 0.5, 0.5];
