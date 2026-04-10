@@ -51,6 +51,7 @@ final textBlocks = await ocrPlugin.detectText(
 for (final block in textBlocks) {
   print('Text: ${block.text}');
   print('Confidence: ${block.confidence}');
+  print('Orientation: ${block.textOrientation}');
   print('Corners: ${block.points}');
   final bounds = block.boundingBox;
   print('Bounds: ${bounds.left}, ${bounds.top} -> ${bounds.right}, ${bounds.bottom}');
@@ -63,8 +64,20 @@ Each `TextBlock` mirrors the shape produced by the PaddleOCR detector:
 
 - `text` – recognized string
 - `confidence` – recognition probability (0–1)
+- `textOrientation` – reading orientation of the detected text: `landscapeUp`, `landscapeDown`, `portraitUp`, or `portraitDown`
 - `points` – four corner points (clockwise) describing the oriented quadrilateral
+- `characters` – per-character boxes aligned to the recognized text
+- `isRotated180` – whether the recognition crop was flipped 180 degrees before recognition
 - `boundingBox` – convenience `Rect` derived from the polygon for quick overlays
+
+`textOrientation` is the orientation of the text content in the original image coordinates. It is not inferred from polygon point order; it comes from the OCR pipeline's crop normalization and angle-classification steps.
+
+The enum follows the common mobile/device orientation basis. Its canonical clockwise rotations are:
+
+- `portraitUp` = `0°`
+- `landscapeUp` = `90°`
+- `portraitDown` = `180°`
+- `landscapeDown` = `270°`
 
 ### Using with Image Picker
 

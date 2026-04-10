@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:onnxruntime_v2/onnxruntime_v2.dart';
 import 'package:image/image.dart' as img;
+import '../../models/text_block.dart' show TextOrientation;
 import 'types.dart';
 import 'image_utils.dart';
 import 'ocr_debug_dumper.dart';
@@ -163,6 +164,7 @@ class OcrProcessor {
         texts: [],
         scores: [],
         characters: [],
+        textOrientations: [],
         isRotated180: [],
       );
     }
@@ -253,10 +255,18 @@ class OcrProcessor {
     );
 
     final characterBoxesPerDetection = <List<CharacterBox>>[];
+    final textOrientationsPerDetection = <String>[];
     for (int index = 0; index < recognitionResults.length; index++) {
       final rotated180 = classificationMask[index]
           ? rotationStates[index]
           : defaultRotated180;
+      textOrientationsPerDetection.add(
+        _resolveTextOrientation(
+          detectionResult[index],
+          rotated180,
+          preferLandscape: dominantLandscapePreference,
+        ),
+      );
       characterBoxesPerDetection.add(
         buildCharacterBoxes(
           detectionResult[index],
@@ -275,6 +285,7 @@ class OcrProcessor {
     final filteredTexts = <String>[];
     final filteredScores = <double>[];
     final filteredCharacters = <List<CharacterBox>>[];
+    final filteredTextOrientations = <String>[];
     final filteredRotated180 = <bool>[];
 
     for (int i = 0; i < recognitionResults.length; i++) {
@@ -284,6 +295,7 @@ class OcrProcessor {
         filteredTexts.add(recognition.text);
         filteredScores.add(recognition.confidence);
         filteredCharacters.add(characterBoxesPerDetection[i]);
+        filteredTextOrientations.add(textOrientationsPerDetection[i]);
         filteredRotated180.add(rotationStates[i]);
       }
     }
@@ -296,6 +308,7 @@ class OcrProcessor {
         return {
           'text': filteredTexts[index],
           'confidence': filteredScores[index],
+          'textOrientation': filteredTextOrientations[index],
           'isRotated180': filteredRotated180[index],
           'points': filteredResults[index].points
               .map((point) => {'x': point.x, 'y': point.y})
@@ -309,6 +322,7 @@ class OcrProcessor {
       texts: filteredTexts,
       scores: filteredScores,
       characters: filteredCharacters,
+      textOrientations: filteredTextOrientations,
       isRotated180: filteredRotated180,
     );
   }
@@ -394,8 +408,55 @@ class OcrProcessor {
                 .toList(growable: false),
           )
           .toList(growable: false),
+      textOrientations: result.textOrientations
+          .map(
+            (orientation) => _rotateTextOrientation(orientation, angle: angle),
+          )
+          .toList(growable: false),
       isRotated180: List<bool>.from(result.isRotated180),
     );
+  }
+
+  static String _resolveTextOrientation(
+    TextBox textBox,
+    bool rotated180, {
+    required bool preferLandscape,
+  }) {
+    final rotateForRecognition = ImageUtils.shouldRotateRecognitionBox(
+      ImageUtils.orderPointsClockwise(textBox.points),
+      preferLandscape: preferLandscape,
+    );
+    if (rotateForRecognition) {
+      return rotated180
+          ? TextOrientation.landscapeDown.name
+          : TextOrientation.landscapeUp.name;
+    }
+
+    return rotated180
+        ? TextOrientation.portraitDown.name
+        : TextOrientation.portraitUp.name;
+  }
+
+  static String _rotateTextOrientation(
+    String orientation, {
+    required int angle,
+  }) {
+    final normalizedAngle = ((angle % 360) + 360) % 360;
+    final baseAngle = switch (orientation) {
+      'portraitUp' => 0,
+      'landscapeUp' => 90,
+      'portraitDown' => 180,
+      'landscapeDown' => 270,
+      _ => 0,
+    };
+    final rotatedAngle = (baseAngle - normalizedAngle + 360) % 360;
+    return switch (rotatedAngle) {
+      0 => TextOrientation.portraitUp.name,
+      90 => TextOrientation.landscapeUp.name,
+      180 => TextOrientation.portraitDown.name,
+      270 => TextOrientation.landscapeDown.name,
+      _ => TextOrientation.portraitUp.name,
+    };
   }
 
   static List<Point> _mapPointsToOriginalOrientation(
@@ -446,6 +507,27 @@ class OcrProcessor {
       originalWidth: originalWidth,
       originalHeight: originalHeight,
     );
+  }
+
+  @visibleForTesting
+  static String resolveTextOrientationForTest(
+    TextBox textBox,
+    bool rotated180, {
+    required bool preferLandscape,
+  }) {
+    return _resolveTextOrientation(
+      textBox,
+      rotated180,
+      preferLandscape: preferLandscape,
+    );
+  }
+
+  @visibleForTesting
+  static String rotateTextOrientationForTest(
+    String orientation, {
+    required int angle,
+  }) {
+    return _rotateTextOrientation(orientation, angle: angle);
   }
 
   @visibleForTesting

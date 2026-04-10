@@ -1,11 +1,38 @@
 import 'dart:ui';
 
+/// Clockwise orientation of recognized text in original image coordinates.
+///
+/// The naming follows the common mobile/device orientation basis where upright
+/// horizontal text is [TextOrientation.portraitUp] and additional orientations
+/// advance clockwise from there:
+///
+/// - [TextOrientation.portraitUp] = `0°`
+/// - [TextOrientation.landscapeUp] = `90°`
+/// - [TextOrientation.portraitDown] = `180°`
+/// - [TextOrientation.landscapeDown] = `270°`
+enum TextOrientation { landscapeUp, landscapeDown, portraitUp, portraitDown }
+
+/// Helpers for rendering [TextOrientation] consistently across consumers.
+extension TextOrientationRotation on TextOrientation {
+  /// The clockwise rotation needed to render text in its OCR reading direction.
+  int get clockwiseQuarterTurns => switch (this) {
+    TextOrientation.portraitUp => 0,
+    TextOrientation.landscapeUp => 1,
+    TextOrientation.portraitDown => 2,
+    TextOrientation.landscapeDown => 3,
+  };
+
+  /// The clockwise rotation needed to render text in its OCR reading direction.
+  int get clockwiseDegrees => clockwiseQuarterTurns * 90;
+}
+
 /// Represents a detected block of text with its polygon outline.
 class TextBlock {
   final String text;
   final double confidence;
   final List<Offset> points;
   final List<CharacterBox> characters;
+  final TextOrientation textOrientation;
   final bool isRotated180;
 
   const TextBlock({
@@ -13,6 +40,7 @@ class TextBlock {
     required this.confidence,
     required this.points,
     required this.characters,
+    this.textOrientation = TextOrientation.portraitUp,
     this.isRotated180 = false,
   });
 
@@ -66,6 +94,7 @@ class TextBlock {
       confidence: confidence,
       points: points,
       characters: characters,
+      textOrientation: _parseTextOrientation(map),
       isRotated180: map['isRotated180'] == true,
     );
   }
@@ -73,6 +102,7 @@ class TextBlock {
   Map<String, dynamic> toMap() => {
     'text': text,
     'confidence': confidence,
+    'textOrientation': textOrientation.name,
     'isRotated180': isRotated180,
     'points': points
         .map((point) => {'x': point.dx, 'y': point.dy})
@@ -81,6 +111,19 @@ class TextBlock {
         .map((character) => character.toMap())
         .toList(growable: false),
   };
+
+  static TextOrientation _parseTextOrientation(Map<dynamic, dynamic> map) {
+    final rawOrientation = map['textOrientation'];
+    if (rawOrientation is String) {
+      for (final value in TextOrientation.values) {
+        if (value.name == rawOrientation) {
+          return value;
+        }
+      }
+    }
+
+    throw ArgumentError('TextBlock map is missing valid textOrientation.');
+  }
 
   static List<Offset> _fallbackPointsFromRect(Map<dynamic, dynamic> map) {
     final x = map['x'] as num?;
