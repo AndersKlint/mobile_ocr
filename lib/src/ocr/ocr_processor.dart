@@ -1,14 +1,17 @@
 import 'dart:io';
+
 import 'package:flutter/foundation.dart';
-import 'package:onnxruntime_v2/onnxruntime_v2.dart';
 import 'package:image/image.dart' as img;
-import '../../models/text_block.dart' show TextOrientation;
-import 'types.dart';
+import 'package:onnxruntime_v2/onnxruntime_v2.dart';
+
 import 'image_utils.dart';
+import 'ocr_character_box_builder.dart';
 import 'ocr_debug_dumper.dart';
+import 'ocr_orientation_mapper.dart';
+import 'text_classifier.dart';
 import 'text_detector.dart';
 import 'text_recognizer.dart';
-import 'text_classifier.dart';
+import 'types.dart';
 
 class OcrProcessor {
   static const double minRecognitionScore = 0.7;
@@ -137,7 +140,7 @@ class OcrProcessor {
       return rawResult;
     }
 
-    return _mapResultToOriginalOrientation(
+    return OcrOrientationMapper.mapResultToOriginalOrientation(
       rawResult,
       angle: normalizedAngle,
       originalWidth: bitmap.width,
@@ -255,14 +258,14 @@ class OcrProcessor {
           ? rotationStates[index]
           : defaultRotated180;
       textOrientationsPerDetection.add(
-        _resolveTextOrientation(
+        OcrOrientationMapper.resolveTextOrientation(
           detectionResult[index],
           rotated180,
           preferLandscape: dominantLandscapePreference,
         ),
       );
       characterBoxesPerDetection.add(
-        buildCharacterBoxes(
+        OcrCharacterBoxBuilder.build(
           detectionResult[index],
           recognitionResults[index].characterSpans,
           rotated180,
@@ -366,134 +369,6 @@ class OcrProcessor {
     return best;
   }
 
-  static OcrResult _mapResultToOriginalOrientation(
-    OcrResult result, {
-    required int angle,
-    required int originalWidth,
-    required int originalHeight,
-  }) {
-    return OcrResult(
-      boxes: result.boxes
-          .map(
-            (box) => TextBox(
-              ImageUtils.orderPointsClockwise(
-                _mapPointsToOriginalOrientation(
-                  box.points,
-                  angle: angle,
-                  originalWidth: originalWidth,
-                  originalHeight: originalHeight,
-                ),
-              ),
-            ),
-          )
-          .toList(growable: false),
-      texts: List<String>.from(result.texts),
-      scores: List<double>.from(result.scores),
-      characters: result.characters
-          .map(
-            (characters) => characters
-                .map(
-                  (character) => CharacterBox(
-                    text: character.text,
-                    confidence: character.confidence,
-                    points: ImageUtils.orderPointsClockwise(
-                      _mapPointsToOriginalOrientation(
-                        character.points,
-                        angle: angle,
-                        originalWidth: originalWidth,
-                        originalHeight: originalHeight,
-                      ),
-                    ),
-                  ),
-                )
-                .toList(growable: false),
-          )
-          .toList(growable: false),
-      textOrientations: result.textOrientations
-          .map(
-            (orientation) => _rotateTextOrientation(orientation, angle: angle),
-          )
-          .toList(growable: false),
-    );
-  }
-
-  static String _resolveTextOrientation(
-    TextBox textBox,
-    bool rotated180, {
-    required bool preferLandscape,
-  }) {
-    final rotateForRecognition = ImageUtils.shouldRotateRecognitionBox(
-      ImageUtils.orderPointsClockwise(textBox.points),
-      preferLandscape: preferLandscape,
-    );
-    if (rotateForRecognition) {
-      return rotated180
-          ? TextOrientation.landscapeDown.name
-          : TextOrientation.landscapeUp.name;
-    }
-
-    return rotated180
-        ? TextOrientation.portraitDown.name
-        : TextOrientation.portraitUp.name;
-  }
-
-  static String _rotateTextOrientation(
-    String orientation, {
-    required int angle,
-  }) {
-    final normalizedAngle = ((angle % 360) + 360) % 360;
-    final baseAngle = switch (orientation) {
-      'portraitUp' => 0,
-      'landscapeUp' => 90,
-      'portraitDown' => 180,
-      'landscapeDown' => 270,
-      _ => 0,
-    };
-    final rotatedAngle = (baseAngle - normalizedAngle + 360) % 360;
-    return switch (rotatedAngle) {
-      0 => TextOrientation.portraitUp.name,
-      90 => TextOrientation.landscapeUp.name,
-      180 => TextOrientation.portraitDown.name,
-      270 => TextOrientation.landscapeDown.name,
-      _ => TextOrientation.portraitUp.name,
-    };
-  }
-
-  static List<Point> _mapPointsToOriginalOrientation(
-    List<Point> points, {
-    required int angle,
-    required int originalWidth,
-    required int originalHeight,
-  }) {
-    return points
-        .map(
-          (point) => _mapPointToOriginalOrientation(
-            point,
-            angle: angle,
-            originalWidth: originalWidth,
-            originalHeight: originalHeight,
-          ),
-        )
-        .toList(growable: false);
-  }
-
-  static Point _mapPointToOriginalOrientation(
-    Point point, {
-    required int angle,
-    required int originalWidth,
-    required int originalHeight,
-  }) {
-    return switch (angle) {
-      90 => Point(point.y, (originalHeight - 1) - point.x),
-      180 => Point(
-        (originalWidth - 1) - point.x,
-        (originalHeight - 1) - point.y,
-      ),
-      270 => Point((originalWidth - 1) - point.y, point.x),
-      _ => point,
-    };
-  }
-
   @visibleForTesting
   static OcrResult mapResultToOriginalOrientationForTest(
     OcrResult result, {
@@ -501,7 +376,7 @@ class OcrProcessor {
     required int originalWidth,
     required int originalHeight,
   }) {
-    return _mapResultToOriginalOrientation(
+    return OcrOrientationMapper.mapResultToOriginalOrientation(
       result,
       angle: angle,
       originalWidth: originalWidth,
@@ -515,7 +390,7 @@ class OcrProcessor {
     bool rotated180, {
     required bool preferLandscape,
   }) {
-    return _resolveTextOrientation(
+    return OcrOrientationMapper.resolveTextOrientation(
       textBox,
       rotated180,
       preferLandscape: preferLandscape,
@@ -527,7 +402,10 @@ class OcrProcessor {
     String orientation, {
     required int angle,
   }) {
-    return _rotateTextOrientation(orientation, angle: angle);
+    return OcrOrientationMapper.rotateTextOrientation(
+      orientation,
+      angle: angle,
+    );
   }
 
   @visibleForTesting
@@ -535,20 +413,10 @@ class OcrProcessor {
     required bool sourceIsLandscape,
     required bool detectedIsLandscape,
   }) {
-    return _normalizeOrientationAngle(
+    return OcrOrientationMapper.normalizeOrientationAngle(
       sourceIsLandscape: sourceIsLandscape,
       detectedIsLandscape: detectedIsLandscape,
     );
-  }
-
-  static int _normalizeOrientationAngle({
-    required bool sourceIsLandscape,
-    required bool detectedIsLandscape,
-  }) {
-    if (sourceIsLandscape == detectedIsLandscape) {
-      return 0;
-    }
-    return 90;
   }
 
   @visibleForTesting
@@ -574,48 +442,20 @@ class OcrProcessor {
     required List<bool> classificationMask,
     required List<bool> rotationStates,
   }) {
-    var rotatedCount = 0;
-    var uprightCount = 0;
-
-    for (int index = 0; index < classificationMask.length; index++) {
-      if (!classificationMask[index]) {
-        continue;
-      }
-      if (rotationStates[index]) {
-        rotatedCount++;
-      } else {
-        uprightCount++;
-      }
-    }
-
-    return rotatedCount > uprightCount;
+    return OcrOrientationMapper.resolveDefaultRotated180(
+      classificationMask: classificationMask,
+      rotationStates: rotationStates,
+    );
   }
 
   static bool _resolveRecognitionBoxLandscapePreference(
     List<List<Point>> boxes, {
     required bool fallback,
   }) {
-    var landscapeCount = 0;
-    var portraitCount = 0;
-
-    for (final box in boxes) {
-      final prefersLandscape =
-          ImageUtils.inferRecognitionBoxLandscapePreference(box);
-      if (prefersLandscape == null) {
-        continue;
-      }
-      if (prefersLandscape) {
-        landscapeCount++;
-      } else {
-        portraitCount++;
-      }
-    }
-
-    if (landscapeCount == portraitCount) {
-      return fallback;
-    }
-
-    return landscapeCount > portraitCount;
+    return OcrOrientationMapper.resolveRecognitionBoxLandscapePreference(
+      boxes,
+      fallback: fallback,
+    );
   }
 
   Future<QuickCheckResult> hasHighConfidenceText(
@@ -804,7 +644,7 @@ class OcrProcessor {
     bool rotated, {
     bool preferLandscape = false,
   }) {
-    return buildCharacterBoxesForTest(
+    return OcrCharacterBoxBuilder.build(
       textBox,
       spans,
       rotated,
@@ -819,73 +659,11 @@ class OcrProcessor {
     bool rotated, {
     bool preferLandscape = false,
   }) {
-    if (spans.isEmpty) {
-      return [];
-    }
-
-    final ordered = ImageUtils.orderPointsClockwise(textBox.points);
-    if (ordered.length != 4) {
-      return [];
-    }
-
-    final topLeft = ordered[0];
-    final topRight = ordered[1];
-    final bottomRight = ordered[2];
-    final bottomLeft = ordered[3];
-    final rotateForRecognition = ImageUtils.shouldRotateRecognitionBox(
-      ordered,
+    return OcrCharacterBoxBuilder.build(
+      textBox,
+      spans,
+      rotated,
       preferLandscape: preferLandscape,
-    );
-
-    const epsilon = 1e-4;
-
-    return spans
-        .map((span) {
-          var start = span.startRatio;
-          var end = span.endRatio;
-
-          if (rotated) {
-            final reversedStart = 1.0 - end;
-            final reversedEnd = 1.0 - start;
-            start = reversedStart.clamp(0.0, 1.0);
-            end = reversedEnd.clamp(start + epsilon, 1.0);
-          }
-
-          final clampedStart = start.clamp(0.0, 1.0);
-          final clampedEnd = end.clamp(clampedStart + epsilon, 1.0);
-          if (clampedEnd - clampedStart <= epsilon) {
-            return null;
-          }
-
-          final points = rotateForRecognition
-              ? [
-                  _interpolate(bottomLeft, topLeft, clampedStart),
-                  _interpolate(bottomLeft, topLeft, clampedEnd),
-                  _interpolate(bottomRight, topRight, clampedEnd),
-                  _interpolate(bottomRight, topRight, clampedStart),
-                ]
-              : [
-                  _interpolate(topLeft, topRight, clampedStart),
-                  _interpolate(topLeft, topRight, clampedEnd),
-                  _interpolate(bottomLeft, bottomRight, clampedEnd),
-                  _interpolate(bottomLeft, bottomRight, clampedStart),
-                ];
-
-          return CharacterBox(
-            text: span.text,
-            confidence: span.confidence,
-            points: ImageUtils.orderPointsClockwise(points),
-          );
-        })
-        .whereType<CharacterBox>()
-        .toList();
-  }
-
-  static Point _interpolate(Point start, Point end, double ratio) {
-    final clamped = ratio.clamp(0.0, 1.0);
-    return Point(
-      start.x + (end.x - start.x) * clamped,
-      start.y + (end.y - start.y) * clamped,
     );
   }
 

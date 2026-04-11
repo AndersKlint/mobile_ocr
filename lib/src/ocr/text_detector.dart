@@ -411,51 +411,6 @@ class TextDetector {
     return (ImageUtils.orderPointsClockwise(rect), getMinSide(rect));
   }
 
-  List<List<Point>> extractConnectedComponents(List<List<bool>> binaryMap) {
-    final height = binaryMap.length;
-    final width = height > 0 ? binaryMap[0].length : 0;
-    final visited = List.generate(height, (_) => List.filled(width, false));
-    final components = <List<Point>>[];
-    final stack = <(int, int)>[];
-
-    for (int y = 0; y < height; y++) {
-      for (int x = 0; x < width; x++) {
-        if (!binaryMap[y][x] || visited[y][x]) continue;
-
-        final points = <Point>[];
-        stack.clear();
-        stack.add((x, y));
-        visited[y][x] = true;
-
-        while (stack.isNotEmpty) {
-          final (cx, cy) = stack.removeLast();
-          points.add(Point(cx.toDouble(), cy.toDouble()));
-
-          for (int dy = -1; dy <= 1; dy++) {
-            for (int dx = -1; dx <= 1; dx++) {
-              if (dx == 0 && dy == 0) continue;
-              final nx = cx + dx;
-              final ny = cy + dy;
-              if (nx >= 0 &&
-                  nx < width &&
-                  ny >= 0 &&
-                  ny < height &&
-                  binaryMap[ny][nx] &&
-                  !visited[ny][nx]) {
-                visited[ny][nx] = true;
-                stack.add((nx, ny));
-              }
-            }
-          }
-        }
-
-        components.add(points);
-      }
-    }
-
-    return components;
-  }
-
   static double calculateBoxScore(
     Float32List prob,
     int width,
@@ -500,27 +455,6 @@ class TextDetector {
     }
 
     return count > 0 ? sum / count : 0;
-  }
-
-  bool isPointInsideQuad(double x, double y, List<Point> quad) {
-    if (quad.length < 3) return false;
-
-    bool hasPositive = false;
-    bool hasNegative = false;
-
-    for (int i = 0; i < quad.length; i++) {
-      final p1 = quad[i];
-      final p2 = quad[(i + 1) % quad.length];
-      final cross = (p2.x - p1.x) * (y - p1.y) - (p2.y - p1.y) * (x - p1.x);
-      if (cross > 0) {
-        hasPositive = true;
-      } else if (cross < 0) {
-        hasNegative = true;
-      }
-      if (hasPositive && hasNegative) return false;
-    }
-
-    return true;
   }
 
   static List<Point> convexHull(List<Point> points) {

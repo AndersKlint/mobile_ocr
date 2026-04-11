@@ -90,8 +90,12 @@ class MobileOcr {
 
   /// Quickly determine whether the image contains high-confidence text.
   ///
-  /// Returns `true` if at least one detected text block has confidence >= 0.9.
-  /// Only the detection stage runs, making this faster than full recognition.
+  /// Returns `true` if at least one quick-check candidate produces
+  /// non-empty text with recognition confidence >= 0.7.
+  ///
+  /// This runs a reduced detection + recognition pass over a small number of
+  /// candidates, making it faster than full OCR while still validating the
+  /// detected region contains readable text.
   Future<bool> hasText({required String imagePath}) async {
     final file = File(imagePath);
     if (!file.existsSync()) {
@@ -112,14 +116,21 @@ class ModelPreparationStatus {
   final bool isReady;
   final String? version;
   final String? modelPath;
+  final String? errorMessage;
 
-  ModelPreparationStatus({required this.isReady, this.version, this.modelPath});
+  ModelPreparationStatus({
+    required this.isReady,
+    this.version,
+    this.modelPath,
+    this.errorMessage,
+  });
 
   factory ModelPreparationStatus.fromMap(Map<dynamic, dynamic> map) {
     return ModelPreparationStatus(
       isReady: map['isReady'] == true,
       version: map['version'] as String?,
       modelPath: map['modelPath'] as String?,
+      errorMessage: map['error'] as String?,
     );
   }
 }

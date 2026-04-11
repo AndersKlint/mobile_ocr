@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-`mobile_ocr` is a Flutter plugin for on-device OCR across Android and iOS. The Android implementation directly ports [OnnxOCR](https://github.com/jingsongliujing/OnnxOCR) using PaddleOCR v5 models on ONNX Runtime, while the iOS implementation uses Apple’s Vision framework to provide the same API surface without shipping ONNX models.
+`mobile_ocr` is Flutter plugin for on-device OCR across Android, iOS, Linux, macOS, and Windows. All platforms use same pure Dart ONNX implementation based on PaddleOCR v5 models.
 
-**Critical Constraint**: NO OpenCV or large SDKs. Only native Android APIs (Bitmap, Canvas, Matrix, Paint) and ONNX Runtime are allowed to prevent native library bloat.
+**Critical Constraint**: keep implementation pure Dart inside package where possible. No OpenCV, no large native OCR SDKs, no platform-specific OCR forks.
 
 ## Common Commands
 
@@ -14,9 +14,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 # Run Flutter tests
 flutter test
-
-# Run Android unit tests
-cd android && ./gradlew test
 ```
 
 ### Example App
@@ -41,53 +38,38 @@ Example app auto-loads test images with ground truth validation:
 
 ### OCR Pipeline (3 Stages)
 
-Direct port of OnnxOCR's processing pipeline:
+Pure Dart port of OnnxOCR-style pipeline:
 
-1. **Text Detection** (`android/src/main/kotlin/.../TextDetector.kt`)
-   - DB algorithm, model: `det.onnx` (4.75 MB)
-   - Resize to 960px min side, normalize with mean/std, CHW format
-   - Postprocess: threshold=0.3, box_threshold=0.6, unclip_ratio=1.5
+1. **Text Detection** (`lib/src/ocr/text_detector.dart`)
+   - DB algorithm, model: `det.onnx`
+   - Resize + normalize + contour/unclip postprocess
 
-2. **Angle Classification** (`TextClassifier.kt`)
-   - Detects 180° rotation, model: `cls.onnx` (583 KB)
-   - Input: (3, 48, 192), threshold=0.9
+2. **Angle Classification** (`lib/src/ocr/text_classifier.dart`)
+   - Detects 180° rotation, model: `cls.onnx`
 
-3. **Text Recognition** (`TextRecognizer.kt`)
-   - SVTR_LCNet + CTC decoder, model: `rec.onnx` (16.5 MB)
-   - Input: (3, 48, 320), batch_size=6
+3. **Text Recognition** (`lib/src/ocr/text_recognizer.dart`)
+   - SVTR_LCNet + CTC decode, model: `rec.onnx`
    - Dictionary: `ppocrv5_dict.txt`
 
 ### Model Delivery
 
-Models are NOT bundled with the plugin:
-- **Hosted**: `https://models.ente.io/PP-OCRv5/`
-- **Managed by**: `ModelManager.kt` (download, verify SHA-256, cache)
-- **Cached**: `context.filesDir/assets/mobile_ocr/`
-- **Triggered**: First `prepareModels()` call
-- **Offline**: Works offline after initial download
+Models are bundled with plugin under `assets/mobile_ocr/` and extracted on first use:
+- `det.onnx`
+- `rec.onnx`
+- `cls.onnx`
+- `ppocrv5_dict.txt`
 
 ### Component Structure
 
-**Native (Android)** - `android/src/main/kotlin/io/ente/mobile_ocr/` (PaddleOCR v5 on ONNX Runtime):
-- `MobileOcrPlugin.kt`: Flutter method channel interface
-- `OcrProcessor.kt`: Pipeline orchestrator
-- `ModelManager.kt`: Download/cache manager
-- `TextDetector.kt`: Detection stage
-- `TextClassifier.kt`: Classification stage
-- `TextRecognizer.kt`: Recognition stage
-- `ImageUtils.kt`: Pure Kotlin image preprocessing (NO OpenCV)
-
-**Native (iOS)** - `ios/Classes/` (Apple Vision framework):
-- `MobileOcrPlugin.swift`: Vision-based text recognition returning the shared result schema
-- Uses `VNRecognizeTextRequest` with language auto-detection where available
-- `prepareModels()` short-circuits with `isReady=true` (no downloads required)
-
 **Flutter (Dart)** - `lib/`:
-- `mobile_ocr_plugin.dart`: Public API (`detectText()`, `prepareModels()`)
-- `mobile_ocr_plugin_platform_interface.dart`: Platform interface
-- `mobile_ocr_plugin_method_channel.dart`: Method channel implementation
+- `mobile_ocr.dart`: canonical public entrypoint
+- `mobile_ocr_plugin.dart`: public API implementation
+- `mobile_ocr_plugin_dart.dart`: pure Dart platform implementation
+- `mobile_ocr_plugin_platform_interface.dart`: platform interface
+- `src/ocr/`: detector/classifier/recognizer/pipeline internals
+- `widgets/`: optional text overlay widgets
 
-**Models** - Downloaded at runtime:
+**Models** - bundled assets:
 - `det.onnx`, `rec.onnx`, `cls.onnx`, `ppocrv5_dict.txt`
 
 **Example** - `example/`:
@@ -99,11 +81,10 @@ Models are NOT bundled with the plugin:
 ### No OpenCV Rule
 
 When porting Python `cv2` operations:
-- ✅ Use Android `Bitmap`, `Canvas`, `Matrix`, `Paint`
-- ✅ Implement custom algorithms in pure Kotlin
-- ✅ Accept minor differences if it avoids dependencies
-- ❌ Never use OpenCV or libraries that bundle .so files
-- ❌ Never add large image processing SDKs
+- ✅ Keep image math in pure Dart
+- ✅ Use `image` package and targeted helpers
+- ✅ Accept minor differences if it avoids heavy dependencies
+- ❌ Never use OpenCV or bundled native image-processing SDKs
 
 ### Model Parameter Compatibility
 
@@ -117,18 +98,11 @@ Must match OnnxOCR exactly:
 
 ### Memory Management
 
-- Always call `bitmap.recycle()` after use
-- Close ONNX tensors explicitly
-- Keep heavy processing in native layer
-- Use Kotlin coroutines for async work
+- Close ONNX tensors/sessions explicitly
+- Avoid unnecessary image copies in hot path
+- Keep heavy processing inside OCR pipeline helpers
 
 ## Dependencies
-
-**Android** (`android/build.gradle`):
-```gradle
-implementation("com.microsoft.onnxruntime:onnxruntime-android:1.22.0")
-implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
-```
 
 **Flutter** (`pubspec.yaml`):
 ```yaml
@@ -144,12 +118,14 @@ dev_dependencies:
 
 ## Platform Support
 
-- ✅ Android (API 24+, ONNX Runtime + PaddleOCR)
-- ✅ iOS (Vision framework)
+- ✅ Android
+- ✅ iOS
+- ✅ Linux
+- ✅ macOS
+- ✅ Windows
 
 ## Reference Documentation
 
-- `documentation/ONNX_OCR_PLUGIN_CONTEXT.md`: Complete context, testing workflow
-- `documentation/OnnxOCR_Implementation_Guide.md`: Model specs, algorithms
+- `docs/OnnxOCR_Implementation_Guide.md`: Model specs, algorithms
 - Original: [OnnxOCR](https://github.com/jingsongliujing/OnnxOCR)
 - Models: [PaddleOCR v5](https://github.com/PaddlePaddle/PaddleOCR)

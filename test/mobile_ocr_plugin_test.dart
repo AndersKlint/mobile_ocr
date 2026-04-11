@@ -2,10 +2,9 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
-import 'package:mobile_ocr/mobile_ocr_plugin.dart';
+import 'package:mobile_ocr/mobile_ocr.dart';
 import 'package:mobile_ocr/mobile_ocr_plugin_platform_interface.dart';
 import 'package:mobile_ocr/mobile_ocr_plugin_dart.dart';
-import 'package:mobile_ocr/models/text_block.dart';
 import 'package:mobile_ocr/src/ocr/image_utils.dart';
 import 'package:mobile_ocr/src/ocr/ocr_processor.dart';
 import 'package:mobile_ocr/src/ocr/types.dart' as ocr;
@@ -88,6 +87,18 @@ void main() {
     MobileOcrPlatform.instance = fakePlatform;
 
     expect(await mobileOcr.getPlatformVersion(), '42');
+  });
+
+  test('prepareModels preserves error message from platform status', () async {
+    final mobileOcr = MobileOcr();
+    MobileOcrPlatform.instance = _PreparationFailurePlatform(
+      errorMessage: 'network timeout',
+    );
+
+    final status = await mobileOcr.prepareModels();
+
+    expect(status.isReady, isFalse);
+    expect(status.errorMessage, 'network timeout');
   });
 
   test('TextBlock computes bounding box from points', () {
@@ -197,6 +208,19 @@ void main() {
     expect(verifyingPlatform.lastImagePath, tempFile.path);
 
     await tempDir.delete(recursive: true);
+  });
+
+  test('hasTextInImage delegates to platform implementation', () async {
+    final mobileOcr = MobileOcr();
+    final verifyingPlatform = _VerifyingMobileOcrPlatform();
+    verifyingPlatform.response = true;
+    MobileOcrPlatform.instance = verifyingPlatform;
+
+    final image = img.Image(width: 3, height: 2, numChannels: 4);
+    final result = await mobileOcr.hasTextInImage(image: image);
+
+    expect(result, isTrue);
+    expect(identical(verifyingPlatform.lastImage, image), isTrue);
   });
 
   test('detectText forwards debug dump directory', () async {
@@ -542,6 +566,7 @@ void main() {
 
 class _VerifyingMobileOcrPlatform extends MockMobileOcrPlatform {
   String? lastImagePath;
+  img.Image? lastImage;
   String? lastDebugDumpDir;
   bool? lastTrimRecognitionWhitespace;
   bool? lastEnhanceRecognitionCrops;
@@ -572,5 +597,27 @@ class _VerifyingMobileOcrPlatform extends MockMobileOcrPlatform {
   Future<bool> hasText({required String imagePath}) async {
     lastImagePath = imagePath;
     return response;
+  }
+
+  @override
+  Future<bool> hasTextInImage({required img.Image image}) async {
+    lastImage = image;
+    return response;
+  }
+}
+
+class _PreparationFailurePlatform extends MockMobileOcrPlatform {
+  _PreparationFailurePlatform({required this.errorMessage});
+
+  final String errorMessage;
+
+  @override
+  Future<Map<dynamic, dynamic>> prepareModels() async {
+    return {
+      'isReady': false,
+      'version': null,
+      'modelPath': null,
+      'error': errorMessage,
+    };
   }
 }

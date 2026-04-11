@@ -341,8 +341,8 @@ void main() {
   });
 
   group('TextDetector resize', () {
-    test('calculateResizeDimensions matches Paddle max-side behavior', () {
-      expect(TextDetector.calculateResizeDimensions(4032, 3024), (960, 704));
+    test('calculateResizeDimensions matches current max-side behavior', () {
+      expect(TextDetector.calculateResizeDimensions(4032, 3024), (1920, 1440));
       expect(TextDetector.calculateResizeDimensions(640, 480), (640, 480));
       expect(TextDetector.calculateResizeDimensions(20, 20), (32, 32));
     });

@@ -8,75 +8,13 @@ import 'package:mobile_ocr/models/text_block.dart';
 import 'package:mobile_ocr/src/display_image_helper.dart';
 import 'package:mobile_ocr/widgets/text_overlay_widget.dart';
 
-const Color _entePrimaryColor = Color(0xFF1DB954);
-const double _enteSelectionHighlightOpacity = 0.28;
+part 'text_detector_widget_controller.dart';
+part 'text_detector_widget_image_layer.dart';
+part 'text_detector_widget_status_widgets.dart';
+part 'text_detector_widget_strings.dart';
 
-/// Collection of user-facing strings used by [TextDetectorWidget].
-class TextDetectorStrings {
-  final String processingOverlayMessage;
-  final String selectionHint;
-  final String noTextDetected;
-  final String retryButtonLabel;
-  final String modelsNetworkRequiredError;
-  final String modelsPrepareFailed;
-  final String imageNotFoundError;
-  final String imageDecodeFailedError;
-  final String genericDetectError;
-
-  const TextDetectorStrings({
-    this.processingOverlayMessage = 'Detecting text...',
-    this.selectionHint = 'Swipe or double tap to select just what you need',
-    this.noTextDetected = 'No text detected',
-    this.retryButtonLabel = 'Retry',
-    this.modelsNetworkRequiredError =
-        'Network connection required to download OCR models on first use',
-    this.modelsPrepareFailed = 'Could not prepare OCR models',
-    this.imageNotFoundError = 'Image file not found',
-    this.imageDecodeFailedError = 'Could not read image file',
-    this.genericDetectError = 'Could not detect text in image',
-  });
-}
-
-/// Controller that surfaces imperative actions for [TextDetectorWidget].
-class TextDetectorController extends ChangeNotifier {
-  _TextDetectorWidgetState? _state;
-
-  void _attach(_TextDetectorWidgetState state) {
-    if (identical(_state, state)) {
-      return;
-    }
-    _state = state;
-    scheduleMicrotask(() {
-      notifyListeners();
-    });
-  }
-
-  void _detach(_TextDetectorWidgetState state) {
-    if (identical(_state, state)) {
-      _state = null;
-      notifyListeners();
-    }
-  }
-
-  void _notifyStateChanged() {
-    notifyListeners();
-  }
-
-  /// Whether text detection is currently running.
-  bool get isProcessing => _state?._isProcessing ?? false;
-
-  /// Indicates if there is text that can be selected.
-  bool get hasSelectableText => _state?._hasSelectableText ?? false;
-
-  /// Programmatically select all recognized text.
-  bool selectAllText() {
-    final state = _state;
-    if (state == null) {
-      return false;
-    }
-    return state._selectAllRecognizedText();
-  }
-}
+const Color _selectionPrimaryColor = Color(0xFF1DB954);
+const double _selectionHighlightOpacity = 0.28;
 
 /// A complete text detection widget that displays an image and allows
 /// users to select and copy detected text.
@@ -255,22 +193,14 @@ class _TextDetectorWidgetState extends State<TextDetectorWidget> {
     _modelPreparation ??= _ocr
         .prepareModels()
         .then((status) {
+          if (!status.isReady) {
+            _applyModelPreparationFailure(status.errorMessage);
+            return;
+          }
           _modelsReady = status.isReady;
         })
         .catchError((error, _) {
-          final errorStr = error.toString().toLowerCase();
-          _isNetworkError =
-              errorStr.contains('network') ||
-              errorStr.contains('connection') ||
-              errorStr.contains('timeout') ||
-              errorStr.contains('failed to download') ||
-              errorStr.contains('http');
-
-          if (_isNetworkError) {
-            _errorMessage = widget.strings.modelsNetworkRequiredError;
-          } else {
-            _errorMessage = widget.strings.modelsPrepareFailed;
-          }
+          _applyModelPreparationFailure(error.toString());
           debugPrint('Model preparation error: $error');
         })
         .whenComplete(() {
@@ -278,6 +208,20 @@ class _TextDetectorWidgetState extends State<TextDetectorWidget> {
         });
 
     await _modelPreparation;
+  }
+
+  void _applyModelPreparationFailure(String? errorMessage) {
+    final errorStr = errorMessage?.toLowerCase() ?? '';
+    _isNetworkError =
+        errorStr.contains('network') ||
+        errorStr.contains('connection') ||
+        errorStr.contains('timeout') ||
+        errorStr.contains('failed to download') ||
+        errorStr.contains('http');
+
+    _errorMessage = _isNetworkError
+        ? widget.strings.modelsNetworkRequiredError
+        : widget.strings.modelsPrepareFailed;
   }
 
   Future<void> _detectText() async {
@@ -368,19 +312,23 @@ class _TextDetectorWidgetState extends State<TextDetectorWidget> {
       children: [
         _buildImageLayer(),
         if (_isProcessing && _detectedTextBlocks == null)
-          _buildProcessingOverlay(),
+          _ProcessingOverlay(message: widget.strings.processingOverlayMessage),
         if (_showEditorHint &&
             _detectedTextBlocks != null &&
             _detectedTextBlocks!.isNotEmpty)
-          _buildEditorHint(),
+          _EditorHintOverlay(message: widget.strings.selectionHint),
         if (_errorMessage != null)
           Positioned(
             bottom: 32,
             left: 16,
             right: 16,
             child: _isNetworkError
-                ? _buildNetworkErrorBanner(_errorMessage!)
-                : _buildErrorBanner(_errorMessage!),
+                ? _NetworkErrorBanner(
+                    message: _errorMessage!,
+                    retryLabel: widget.strings.retryButtonLabel,
+                    onRetry: _retryAfterNetworkError,
+                  )
+                : _ErrorBanner(message: _errorMessage!),
           ),
         if (_detectedTextBlocks != null &&
             _detectedTextBlocks!.isEmpty &&
@@ -389,40 +337,11 @@ class _TextDetectorWidgetState extends State<TextDetectorWidget> {
             top: 100,
             left: 0,
             right: 0,
-            child: Center(child: _buildNoTextMessage()),
+            child: Center(
+              child: _NoTextMessage(message: widget.strings.noTextDetected),
+            ),
           ),
       ],
-    );
-  }
-
-  Widget _buildEditorHint() {
-    return Positioned(
-      bottom: 36,
-      left: 0,
-      right: 0,
-      child: IgnorePointer(
-        child: Center(
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.75),
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(
-                color: CupertinoColors.activeBlue.withValues(alpha: 0.3),
-                width: 0.8,
-              ),
-            ),
-            child: Text(
-              widget.strings.selectionHint,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ),
-      ),
     );
   }
 
@@ -468,177 +387,13 @@ class _TextDetectorWidgetState extends State<TextDetectorWidget> {
     });
   }
 
-  Widget _buildImageLayer() {
-    final imageFile = _imageFile;
-    final textBlocks = _detectedTextBlocks;
-    if (imageFile == null || textBlocks == null) {
-      return const SizedBox.shrink();
-    }
-
-    final TextSelectionThemeData baseSelectionTheme = TextSelectionTheme.of(
-      context,
-    );
-    final TextSelectionThemeData overlaySelectionTheme = baseSelectionTheme
-        .copyWith(
-          selectionColor: _entePrimaryColor.withValues(
-            alpha: _enteSelectionHighlightOpacity,
-          ),
-          selectionHandleColor: _entePrimaryColor,
-        );
-
-    return Container(
-      color: widget.backgroundColor,
-      child: TextSelectionTheme(
-        data: overlaySelectionTheme,
-        child: TextOverlayWidget(
-          imageFile: imageFile,
-          textBlocks: textBlocks,
-          onTextBlocksSelected: widget.onTextBlocksSelected,
-          onTextCopied: widget.onTextCopied,
-          onSelectionStart: _dismissEditorHint,
-          showUnselectedBoundaries: widget.showUnselectedBoundaries,
-          enableSelectionPreview: widget.enableSelectionPreview,
-          debugMode: widget.debugMode,
-          controller: _textOverlayController,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildProcessingOverlay() {
-    return Positioned(
-      top: 100,
-      left: 0,
-      right: 0,
-      child: Center(
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-          decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.7),
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const CupertinoActivityIndicator(radius: 10, color: Colors.white),
-              const SizedBox(width: 8),
-              Text(
-                widget.strings.processingOverlayMessage,
-                style: const TextStyle(color: Colors.white, fontSize: 14),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildErrorBanner(String message) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-      decoration: BoxDecoration(
-        color: Colors.red.withValues(alpha: 0.9),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Text(
-        message,
-        textAlign: TextAlign.center,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 14,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNetworkErrorBanner(String message) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.85),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: Colors.orange.withValues(alpha: 0.3),
-          width: 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.orange.withValues(alpha: 0.2),
-            blurRadius: 20,
-            spreadRadius: 2,
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.cloud_download_outlined,
-            color: Colors.orange.shade300,
-            size: 40,
-          ),
-          const SizedBox(height: 12),
-          Text(
-            message,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 15,
-              fontWeight: FontWeight.w500,
-              height: 1.4,
-            ),
-          ),
-          const SizedBox(height: 16),
-          OutlinedButton.icon(
-            onPressed: () {
-              setState(() {
-                _errorMessage = null;
-                _isNetworkError = false;
-                _modelsReady = false;
-              });
-              _detectText();
-            },
-            icon: const Icon(Icons.refresh, size: 18),
-            label: Text(widget.strings.retryButtonLabel),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: Colors.orange.shade300,
-              side: BorderSide(color: Colors.orange.shade300),
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildNoTextMessage() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.search_off,
-            color: Colors.white.withValues(alpha: 0.7),
-            size: 16,
-          ),
-          const SizedBox(width: 8),
-          Text(
-            widget.strings.noTextDetected,
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.8),
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
-      ),
-    );
+  void _retryAfterNetworkError() {
+    setState(() {
+      _errorMessage = null;
+      _isNetworkError = false;
+      _modelsReady = false;
+    });
+    _detectText();
   }
 
   /// Manually trigger text detection

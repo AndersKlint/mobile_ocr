@@ -29,7 +29,7 @@ dependencies:
 ### Basic Usage
 
 ```dart
-import 'package:mobile_ocr/mobile_ocr_plugin.dart';
+import 'package:mobile_ocr/mobile_ocr.dart';
 
 // Create plugin instance
 final ocrPlugin = MobileOcr();
@@ -67,7 +67,6 @@ Each `TextBlock` mirrors the shape produced by the PaddleOCR detector:
 - `textOrientation` – reading orientation of the detected text: `landscapeUp`, `landscapeDown`, `portraitUp`, or `portraitDown`
 - `points` – four corner points (clockwise) describing the oriented quadrilateral
 - `characters` – per-character boxes aligned to the recognized text
-- `isRotated180` – whether the recognition crop was flipped 180 degrees before recognition
 - `boundingBox` – convenience `Rect` derived from the polygon for quick overlays
 
 `textOrientation` is the orientation of the text content in the original image coordinates. It is not inferred from polygon point order; it comes from the OCR pipeline's crop normalization and angle-classification steps.
@@ -137,7 +136,6 @@ All platforms use the same pure Dart ONNX implementation via `onnxruntime_v2`.
 
 This work would not be possible without:
 
-- [Ente Mobile OCR](https://github.com/ente-io/mobile_ocr) - Original plugin this was forked from
 - [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR) - The original OCR models and algorithms
 - [OnnxOCR](https://github.com/jingsongliujing/OnnxOCR) - ONNX implementation and pipeline architecture
 

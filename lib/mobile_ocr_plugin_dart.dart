@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -11,10 +12,9 @@ import '../src/ocr/fast_image_loader.dart';
 class DartMobileOcr extends MobileOcrPlatform {
   OcrProcessor? _processor;
   String? _modelPath;
-  bool _isInitialized = false;
-  bool _isInitializing = false;
-  String? _processorDebugDumpDir;
-  OcrProcessingOptions _processingOptions = const OcrProcessingOptions();
+  _ProcessorConfiguration? _processorConfiguration;
+  Future<void>? _initializationFuture;
+  Future<void> _operationQueue = Future<void>.value();
 
   static const String _modelVersion = 'pp-ocrv5-202410';
   static const List<String> _modelFiles = [
@@ -82,7 +82,7 @@ class DartMobileOcr extends MobileOcrPlatform {
   Future<void> _ensureInitialized() async {
     await _ensureInitializedWithOptions(
       debugDumpDir: null,
-      processingOptions: _processingOptions,
+      processingOptions: const OcrProcessingOptions(),
     );
   }
 
@@ -90,70 +90,106 @@ class DartMobileOcr extends MobileOcrPlatform {
     required String? debugDumpDir,
     required OcrProcessingOptions processingOptions,
   }) async {
-    if (_isInitialized &&
-        _processor != null &&
-        _processorDebugDumpDir == debugDumpDir &&
-        _processingOptions == processingOptions) {
+    final requestedConfiguration = _ProcessorConfiguration(
+      debugDumpDir: debugDumpDir,
+      processingOptions: processingOptions,
+    );
+    if (_isProcessorReadyFor(requestedConfiguration)) {
       return;
     }
 
-    if (_isInitialized &&
-        (_processorDebugDumpDir != debugDumpDir ||
-            _processingOptions != processingOptions)) {
-      _processor?.close();
-      _processor = null;
-      _isInitialized = false;
-    }
-
-    if (_isInitialized) return;
-    if (_isInitializing) {
-      while (_isInitializing) {
-        await Future.delayed(const Duration(milliseconds: 10));
-      }
-      return;
-    }
-
-    _isInitializing = true;
+    final initializationFuture = _initializationFuture ??= _initializeProcessor(
+      requestedConfiguration,
+    );
     try {
-      final modelsDir = await _getModelsDirectory();
-      _modelPath = modelsDir;
-
-      await _extractModelsFromAssets(modelsDir);
-
-      final detectionModel = '$modelsDir/det.onnx';
-      final recognitionModel = '$modelsDir/rec.onnx';
-      final classificationModel = '$modelsDir/cls.onnx';
-      final dictionaryPath = '$modelsDir/ppocrv5_dict.txt';
-
-      final detExists = await File(detectionModel).exists();
-      final recExists = await File(recognitionModel).exists();
-      final dictExists = await File(dictionaryPath).exists();
-
-      if (!detExists || !recExists || !dictExists) {
-        throw StateError(
-          'Models not found at $modelsDir. '
-          'Please ensure models are bundled with the application.',
-        );
-      }
-
-      _processor = await OcrProcessor.create(
-        detectionModelPath: detectionModel,
-        recognitionModelPath: recognitionModel,
-        classificationModelPath: await File(classificationModel).exists()
-            ? classificationModel
-            : null,
-        dictionaryPath: dictionaryPath,
-        useAngleClassification: await File(classificationModel).exists(),
-        debugDumpDir: debugDumpDir,
-        processingOptions: processingOptions,
-      );
-
-      _processorDebugDumpDir = debugDumpDir;
-      _processingOptions = processingOptions;
-      _isInitialized = true;
+      await initializationFuture;
     } finally {
-      _isInitializing = false;
+      if (identical(_initializationFuture, initializationFuture)) {
+        _initializationFuture = null;
+      }
     }
+  }
+
+  bool _isProcessorReadyFor(_ProcessorConfiguration configuration) {
+    return _processor != null && _processorConfiguration == configuration;
+  }
+
+  Future<void> _initializeProcessor(
+    _ProcessorConfiguration configuration,
+  ) async {
+    if (_processor != null && _processorConfiguration != configuration) {
+      await _disposeProcessor();
+    }
+
+    final modelsDir = await _getModelsDirectory();
+    _modelPath = modelsDir;
+
+    await _extractModelsFromAssets(modelsDir);
+
+    final detectionModel = '$modelsDir/det.onnx';
+    final recognitionModel = '$modelsDir/rec.onnx';
+    final classificationModel = '$modelsDir/cls.onnx';
+    final dictionaryPath = '$modelsDir/ppocrv5_dict.txt';
+
+    final detExists = await File(detectionModel).exists();
+    final recExists = await File(recognitionModel).exists();
+    final dictExists = await File(dictionaryPath).exists();
+    final hasClassificationModel = await File(classificationModel).exists();
+
+    if (!detExists || !recExists || !dictExists) {
+      throw StateError(
+        'Models not found at $modelsDir. '
+        'Please ensure models are bundled with the application.',
+      );
+    }
+
+    _processor = await OcrProcessor.create(
+      detectionModelPath: detectionModel,
+      recognitionModelPath: recognitionModel,
+      classificationModelPath: hasClassificationModel
+          ? classificationModel
+          : null,
+      dictionaryPath: dictionaryPath,
+      useAngleClassification: hasClassificationModel,
+      debugDumpDir: configuration.debugDumpDir,
+      processingOptions: configuration.processingOptions,
+    );
+    _processorConfiguration = configuration;
+  }
+
+  Future<void> _disposeProcessor() async {
+    final processor = _processor;
+    _processor = null;
+    _processorConfiguration = null;
+    if (processor != null) {
+      await processor.close();
+    }
+  }
+
+  OcrProcessingOptions _buildProcessingOptions({
+    required bool trimRecognitionWhitespace,
+    required bool enhanceRecognitionCrops,
+    required double recognitionContrastBoost,
+    required double recognitionBrightnessBoost,
+  }) {
+    return OcrProcessingOptions(
+      trimRecognitionWhitespace: trimRecognitionWhitespace,
+      enhanceRecognitionCrops: enhanceRecognitionCrops,
+      recognitionContrastBoost: recognitionContrastBoost,
+      recognitionBrightnessBoost: recognitionBrightnessBoost,
+    );
+  }
+
+  Future<T> _runExclusive<T>(Future<T> Function() action) {
+    final previousOperation = _operationQueue;
+    final nextOperation = Completer<void>();
+    _operationQueue = nextOperation.future;
+
+    return previousOperation.then((_) => action()).whenComplete(() {
+      if (!nextOperation.isCompleted) {
+        nextOperation.complete();
+      }
+    });
   }
 
   @override
@@ -163,21 +199,23 @@ class DartMobileOcr extends MobileOcrPlatform {
 
   @override
   Future<Map<dynamic, dynamic>> prepareModels() async {
-    try {
-      await _ensureInitialized();
-      return {
-        'isReady': true,
-        'version': _modelVersion,
-        'modelPath': _modelPath,
-      };
-    } catch (e) {
-      return {
-        'isReady': false,
-        'version': null,
-        'modelPath': null,
-        'error': e.toString(),
-      };
-    }
+    return _runExclusive(() async {
+      try {
+        await _ensureInitialized();
+        return {
+          'isReady': true,
+          'version': _modelVersion,
+          'modelPath': _modelPath,
+        };
+      } catch (e) {
+        return {
+          'isReady': false,
+          'version': null,
+          'modelPath': null,
+          'error': e.toString(),
+        };
+      }
+    });
   }
 
   @override
@@ -190,32 +228,34 @@ class DartMobileOcr extends MobileOcrPlatform {
     double recognitionContrastBoost = 0.08,
     double recognitionBrightnessBoost = 0.02,
   }) async {
-    await _ensureInitializedWithOptions(
-      debugDumpDir: debugDumpDir,
-      processingOptions: OcrProcessingOptions(
-        trimRecognitionWhitespace: trimRecognitionWhitespace,
-        enhanceRecognitionCrops: enhanceRecognitionCrops,
-        recognitionContrastBoost: recognitionContrastBoost,
-        recognitionBrightnessBoost: recognitionBrightnessBoost,
-      ),
-    );
+    return _runExclusive(() async {
+      await _ensureInitializedWithOptions(
+        debugDumpDir: debugDumpDir,
+        processingOptions: _buildProcessingOptions(
+          trimRecognitionWhitespace: trimRecognitionWhitespace,
+          enhanceRecognitionCrops: enhanceRecognitionCrops,
+          recognitionContrastBoost: recognitionContrastBoost,
+          recognitionBrightnessBoost: recognitionBrightnessBoost,
+        ),
+      );
 
-    final file = File(imagePath);
-    if (!await file.exists()) {
-      throw ArgumentError('Image file does not exist: $imagePath');
-    }
+      final file = File(imagePath);
+      if (!await file.exists()) {
+        throw ArgumentError('Image file does not exist: $imagePath');
+      }
 
-    final image = await _loadAndConvertImage(imagePath);
-    if (image == null) {
-      throw ArgumentError('Could not decode image: $imagePath');
-    }
+      final image = await _loadAndConvertImage(imagePath);
+      if (image == null) {
+        throw ArgumentError('Could not decode image: $imagePath');
+      }
 
-    final result = await _processor!.processImage(
-      image,
-      includeAllConfidenceScores: includeAllConfidenceScores,
-    );
+      final result = await _processor!.processImage(
+        image,
+        includeAllConfidenceScores: includeAllConfidenceScores,
+      );
 
-    return _convertResultToMap(result);
+      return _convertResultToMap(result);
+    });
   }
 
   @override
@@ -228,48 +268,54 @@ class DartMobileOcr extends MobileOcrPlatform {
     double recognitionContrastBoost = 0.08,
     double recognitionBrightnessBoost = 0.02,
   }) async {
-    await _ensureInitializedWithOptions(
-      debugDumpDir: debugDumpDir,
-      processingOptions: OcrProcessingOptions(
-        trimRecognitionWhitespace: trimRecognitionWhitespace,
-        enhanceRecognitionCrops: enhanceRecognitionCrops,
-        recognitionContrastBoost: recognitionContrastBoost,
-        recognitionBrightnessBoost: recognitionBrightnessBoost,
-      ),
-    );
+    return _runExclusive(() async {
+      await _ensureInitializedWithOptions(
+        debugDumpDir: debugDumpDir,
+        processingOptions: _buildProcessingOptions(
+          trimRecognitionWhitespace: trimRecognitionWhitespace,
+          enhanceRecognitionCrops: enhanceRecognitionCrops,
+          recognitionContrastBoost: recognitionContrastBoost,
+          recognitionBrightnessBoost: recognitionBrightnessBoost,
+        ),
+      );
 
-    final result = await _processor!.processImage(
-      image,
-      includeAllConfidenceScores: includeAllConfidenceScores,
-    );
+      final result = await _processor!.processImage(
+        image,
+        includeAllConfidenceScores: includeAllConfidenceScores,
+      );
 
-    return _convertResultToMap(result);
+      return _convertResultToMap(result);
+    });
   }
 
   @override
   Future<bool> hasText({required String imagePath}) async {
-    await _ensureInitialized();
+    return _runExclusive(() async {
+      await _ensureInitialized();
 
-    final file = File(imagePath);
-    if (!await file.exists()) {
-      throw ArgumentError('Image file does not exist: $imagePath');
-    }
+      final file = File(imagePath);
+      if (!await file.exists()) {
+        throw ArgumentError('Image file does not exist: $imagePath');
+      }
 
-    final image = await _loadAndConvertImage(imagePath);
-    if (image == null) {
-      throw ArgumentError('Could not decode image: $imagePath');
-    }
+      final image = await _loadAndConvertImage(imagePath);
+      if (image == null) {
+        throw ArgumentError('Could not decode image: $imagePath');
+      }
 
-    final result = await _processor!.hasHighConfidenceText(image);
-    return result.hasText;
+      final result = await _processor!.hasHighConfidenceText(image);
+      return result.hasText;
+    });
   }
 
   @override
   Future<bool> hasTextInImage({required img.Image image}) async {
-    await _ensureInitialized();
+    return _runExclusive(() async {
+      await _ensureInitialized();
 
-    final result = await _processor!.hasHighConfidenceText(image);
-    return result.hasText;
+      final result = await _processor!.hasHighConfidenceText(image);
+      return result.hasText;
+    });
   }
 
   Future<img.Image?> _loadAndConvertImage(String imagePath) async {
@@ -319,9 +365,29 @@ class DartMobileOcr extends MobileOcrPlatform {
   }
 
   void dispose() {
-    _processor?.close();
+    unawaited(_disposeProcessor());
     _processor = null;
-    _isInitialized = false;
-    _processorDebugDumpDir = null;
+    _modelPath = null;
+    _initializationFuture = null;
   }
+}
+
+class _ProcessorConfiguration {
+  const _ProcessorConfiguration({
+    required this.debugDumpDir,
+    required this.processingOptions,
+  });
+
+  final String? debugDumpDir;
+  final OcrProcessingOptions processingOptions;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is _ProcessorConfiguration &&
+          debugDumpDir == other.debugDumpDir &&
+          processingOptions == other.processingOptions;
+
+  @override
+  int get hashCode => Object.hash(debugDumpDir, processingOptions);
 }
